@@ -36,7 +36,7 @@ router.post('/register', async (req, res) => {
             firstName: user.firstName,
             lastName: user.lastName,
             email: user.email,
-            isAdmin: user.isAdmin,
+            role: user.role,
             token: generateToken(user._id)
         });
     } else {
@@ -57,7 +57,7 @@ router.post('/login', async (req, res) => {
             firstName: user.firstName,
             lastName: user.lastName,
             email: user.email,
-            isAdmin: user.isAdmin,
+            role: user.role,
             token: generateToken(user._id)
         });
     } else {
