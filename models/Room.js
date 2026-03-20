@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 const roomSchema = new mongoose.Schema({
-     name: {
+  name: {
     type: String,
     required: true,
     trim: true,
@@ -9,7 +9,7 @@ const roomSchema = new mongoose.Schema({
   type: {
     type: String,
     required: true,
-    enum: ['deluxe',  'luxury', 'semiluxury', 'dayOuting'],
+    enum: ['deluxe', 'luxury', 'semiluxury', 'dayOuting'],
   },
   price: {
     type: Number,
@@ -25,7 +25,37 @@ const roomSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  tagline: {
+    type: String,
+    default: '',
+  },
+  tags: [{
+    type: String,
+  }],
+  capacity: {
+    type: String,
+    default: '',
+  },
+  size: {
+    type: String,
+    default: '',
+  },
+  badge: {
+    type: String,
+    default: '',
+  },
+  badgeColor: {
+    type: String,
+    default: 'bg-blue-500',
+  },
   features: [{
+    type: String,
+  }],
+  facilities: [{
+    icon: { type: String, default: '' },
+    label: { type: String, default: '' },
+  }],
+  includes: [{
     type: String,
   }],
   image: {
