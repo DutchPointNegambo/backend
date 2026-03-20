@@ -9,7 +9,7 @@ const roomSchema = new mongoose.Schema({
   type: {
     type: String,
     required: true,
-    enum: ['deluxe', 'presidential', 'ocean', 'villa', 'family', 'honeymoon'],
+    enum: ['deluxe',  'luxury', 'semiluxury', 'dayOuting'],
   },
   price: {
     type: Number,
