@@ -6,6 +6,15 @@ const roomSchema = new mongoose.Schema({
     required: true,
     trim: true,
   },
+  package: {
+    type: String,
+    enum: ['full-board', 'day-use'],
+    default: 'full-board',
+  },
+  roomNumber: {
+    type: String,
+    required: true,
+  },
   type: {
     type: String,
     required: true,
