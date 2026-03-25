@@ -5,7 +5,10 @@ export const getRoomsByCategory = async (req, res) => {
   try {
     const { category } = req.params;
     const { package: pkg } = req.query;
-    const filter = { type: category };
+    const filter = {};
+    if (category && category !== 'all') {
+      filter.type = category;
+    }
     if (pkg) filter.package = pkg;
     const rooms = await Room.find(filter);
     res.json(rooms);
@@ -26,10 +29,9 @@ export const checkRoomAvailability = async (req, res) => {
     }
 
     // Check availability for ALL rooms with the same roomNumber
-    // If ANY variant is occupied or under maintenance, the physical room is unavailable.
     const roomsWithSameNumber = await Room.find({ roomNumber: room.roomNumber });
     const isAnyOccupied = roomsWithSameNumber.some(r => r.status !== 'available');
-    
+
     res.json({ available: !isAnyOccupied });
   } catch (error) {
     console.error('Error checking room availability:', error.message);
