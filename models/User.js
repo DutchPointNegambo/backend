@@ -32,7 +32,7 @@ const userSchema = new mongoose.Schema({
     },
     googleId: {
         type: String,
-        sparse: true, // sparse index allows multiple nulls
+        sparse: true, 
         unique: true,
     },
     photoURL: {

@@ -38,7 +38,7 @@ const verifyGoogleIdToken = async (idToken) => {
         throw new Error('Google account email is not verified');
     }
 
-    // If GOOGLE_CLIENT_ID is configured, enforce audience match for stronger validation.
+    
     if (process.env.GOOGLE_CLIENT_ID && tokenData.aud !== process.env.GOOGLE_CLIENT_ID) {
         throw new Error('Google token audience mismatch');
     }
@@ -46,9 +46,7 @@ const verifyGoogleIdToken = async (idToken) => {
     return tokenData;
 };
 
-// @desc    Register a new user
-// @route   POST /api/auth/register
-// @access  Public
+
 export const registerUser = async (req, res) => {
     try {
         const { firstName, lastName, email, phone, password } = req.body;
@@ -90,9 +88,7 @@ export const registerUser = async (req, res) => {
     }
 };
 
-// @desc    Auth user & get token
-// @route   POST /api/auth/login
-// @access  Public
+
 export const loginUser = async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -119,9 +115,7 @@ export const loginUser = async (req, res) => {
     }
 };
 
-// @desc    Authenticate or register a Google user
-// @route   POST /api/auth/google
-// @access  Public
+
 export const googleAuth = async (req, res) => {
     try {
         const { idToken, googleId: rawGoogleId, email: rawEmail, displayName, photoURL } = req.body;
@@ -185,9 +179,7 @@ export const googleAuth = async (req, res) => {
     }
 };
 
-// @desc    Get user profile
-// @route   GET /api/auth/profile
-// @access  Private
+
 export const getUserProfile = async (req, res) => {
     try {
         const user = await User.findById(req.user._id);
@@ -212,9 +204,7 @@ export const getUserProfile = async (req, res) => {
     }
 };
 
-// @desc    Update user profile
-// @route   PUT /api/auth/profile
-// @access  Private
+
 export const updateUserProfile = async (req, res) => {
     try {
         const isGoogleUser = req.user?.googleId || req.user?.accountType === 'google';
