@@ -138,10 +138,10 @@ export const googleAuth = async (req, res) => {
             return res.status(400).json({ message: 'Invalid Google account payload' });
         }
 
-        let googleUser = await GoogleUser.findOne({ $or: [{ googleId }, { email }] });
+        let googleUser = await User.findOne({ $or: [{ googleId }, { email }] });
         if (!googleUser) {
             const parsed = parseName(tokenData.name || displayName || 'Guest User');
-            googleUser = await GoogleUser.create({
+            googleUser = await User.create({
                 googleId,
                 firstName: parsed.firstName,
                 lastName: parsed.lastName,
@@ -190,8 +190,7 @@ export const googleAuth = async (req, res) => {
 // @access  Private
 export const getUserProfile = async (req, res) => {
     try {
-        const model = req.user?.accountType === 'google' ? GoogleUser : User;
-        const user = await model.findById(req.user._id);
+        const user = await User.findById(req.user._id);
 
         if (user) {
             res.json({
@@ -218,9 +217,8 @@ export const getUserProfile = async (req, res) => {
 // @access  Private
 export const updateUserProfile = async (req, res) => {
     try {
-        const isGoogleUser = req.user?.accountType === 'google';
-        const model = isGoogleUser ? GoogleUser : User;
-        const user = await model.findById(req.user._id);
+        const isGoogleUser = req.user?.googleId || req.user?.accountType === 'google';
+        const user = await User.findById(req.user._id);
 
         if (user) {
             user.firstName = req.body.firstName || user.firstName;
