@@ -45,9 +45,7 @@ const userSchema = new mongoose.Schema({
         default: 'guest',
     },
 }, {
-    timestamps: true,
-    autoCreate: false,
-    autoIndex: false
+    timestamps: true
 })
 
 userSchema.pre('save', async function(next) {
