@@ -20,25 +20,17 @@ export const getRoomsByCategory = async (req, res) => {
   }
 };
 
+// Get room by ID
+export const getRoomById = async (req, res) => {
+  const room = await Room.findById(req.params.id);
+  if (!room) return res.status(404).json({ message: "Room not found" });
+  res.json(room);
+};
 
-export const checkRoomAvailability = async (req, res) => {
-  try {
-    const { roomId, checkIn, checkOut } = req.body;
-
-    const room = await Room.findById(roomId);
-    if (!room) {
-      return res.status(404).json({ message: 'Room not found' });
-    }
-
-    // Check availability for ALL rooms with the same roomNumber
-    const roomsWithSameNumber = await Room.find({ roomNumber: room.roomNumber });
-    const isAnyOccupied = roomsWithSameNumber.some(r => r.status !== 'available');
-
-    res.json({ available: !isAnyOccupied });
-  } catch (error) {
-    console.error('Error checking room availability:', error.message);
-    res.status(500).json({ message: 'Server error while checking availability' });
-  }
+// Update room
+export const updateRoom = async (req, res) => {
+  const room = await Room.findByIdAndUpdate(req.params.id, req.body, { new: true });
+  res.json(room);
 };
 
 // GET all rooms (admin)
