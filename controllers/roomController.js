@@ -10,7 +10,9 @@ export const getRoomsByCategory = async (req, res) => {
       filter.type = category;
     }
     if (pkg) filter.package = pkg;
+    console.log('Fetching rooms with filter:', JSON.stringify(filter, null, 2));
     const rooms = await Room.find(filter);
+    console.log(`Found ${rooms.length} rooms for filter:`, JSON.stringify(filter));
     res.json(rooms);
   } catch (error) {
     console.error('Error fetching rooms by category:', error.message);
