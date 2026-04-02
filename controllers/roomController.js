@@ -10,12 +10,12 @@ export const getRoomsByCategory = async (req, res) => {
       filter.type = category;
     }
     if (pkg) filter.package = pkg;
-    console.log('Fetching rooms with filter:', JSON.stringify(filter, null, 2));
+    // console.log('Fetching rooms with filter:', JSON.stringify(filter, null, 2));
     const rooms = await Room.find(filter);
-    console.log(`Found ${rooms.length} rooms for filter:`, JSON.stringify(filter));
+    // console.log(`Found ${rooms.length} rooms for filter:`, JSON.stringify(filter));
     res.json(rooms);
   } catch (error) {
-    console.error('Error fetching rooms by category:', error.message);
+    // console.error('Error fetching rooms by category:', error.message);
     res.status(500).json({ message: 'Server error while fetching rooms' });
   }
 };
@@ -30,18 +30,18 @@ export const checkRoomAvailability = async (req, res) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    // Check availability for ALL rooms with the same roomNumber
+    // Check availability with the same roomNumber
     const roomsWithSameNumber = await Room.find({ roomNumber: room.roomNumber });
     const isAnyOccupied = roomsWithSameNumber.some(r => r.status !== 'available');
 
     res.json({ available: !isAnyOccupied });
   } catch (error) {
-    console.error('Error checking room availability:', error.message);
+    // console.error('Error checking room availability:', error.message);
     res.status(500).json({ message: 'Server error while checking availability' });
   }
 };
 
-// GET all rooms (admin)
+// GET all 
 export const getRooms = async (req, res) => {
   try {
     const { page = 1, limit = 20, search, type } = req.query;
@@ -73,7 +73,7 @@ export const getRooms = async (req, res) => {
   }
 };
 
-// GET single room by ID
+// GET by ID
 export const getRoomById = async (req, res) => {
   try {
     const room = await Room.findById(req.params.id);
@@ -84,7 +84,7 @@ export const getRoomById = async (req, res) => {
   }
 };
 
-// POST create room
+// create room
 export const createRoom = async (req, res) => {
   try {
     const room = await Room.create(req.body);
@@ -94,7 +94,7 @@ export const createRoom = async (req, res) => {
   }
 };
 
-// PUT update room
+// update room
 export const updateRoom = async (req, res) => {
   try {
     const room = await Room.findByIdAndUpdate(req.params.id, req.body, {
@@ -116,5 +116,16 @@ export const deleteRoom = async (req, res) => {
     res.json({ message: 'Room deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+// GET ALL for public (Gallery)
+export const getAllRoomsPublic = async (req, res) => {
+  try {
+    const rooms = await Room.find({}, 'name images type');
+    res.json(rooms);
+  } catch (error) {
+    // console.error('Error fetching all rooms for gallery:', error.message);
+    res.status(500).json({ message: 'Server error while fetching gallery rooms' });
   }
 };
