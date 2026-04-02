@@ -22,6 +22,15 @@ import { getStaff, getStaffById, createStaff, updateStaff, deleteStaff } from '.
 // Reports
 import { getReportSummary, getMonthlyRevenue as getMonthlyReport } from '../controllers/reportController.js';
 
+// Package management
+import {
+    getPackages,
+    getPackageById,
+    createPackage,
+    updatePackage,
+    deletePackage,
+} from '../controllers/packageController.js';
+
 const router = express.Router();
 
 // All routes require a valid JWT token + admin role
@@ -59,5 +68,12 @@ router.delete('/staff/:id', deleteStaff);
 // ── Reports ──────────────────────────────────────────────────
 router.get('/reports/summary', getReportSummary);
 router.get('/reports/monthly', getMonthlyReport);
+
+// ── Packages ─────────────────────────────────────────────────
+router.get('/packages', getPackages);
+router.get('/packages/:id', getPackageById);
+router.post('/packages', createPackage);
+router.put('/packages/:id', updatePackage);
+router.delete('/packages/:id', deletePackage);
 
 export default router;
