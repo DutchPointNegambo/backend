@@ -76,15 +76,23 @@ export const createUser = async (req, res) => {
 
 export const updateUser = async (req, res) => {
     try {
-        const { password, ...updates } = req.body;
+        const { password, firstName, lastName, email, phone, role, status, location } = req.body;
 
-        const user = await User.findByIdAndUpdate(req.params.id, updates, {
-            new: true,
-            runValidators: true,
-        }).select('-password');
-
+        const user = await User.findById(req.params.id);
         if (!user) return res.status(404).json({ message: 'User not found' });
-        res.json(user);
+
+        if (firstName) user.firstName = firstName;
+        if (lastName) user.lastName = lastName;
+        if (email) user.email = email.toLowerCase();
+        if (phone) user.phone = phone;
+        if (role) user.role = role;
+        if (status) user.status = status;
+        if (location !== undefined) user.location = location;
+        if (password) user.password = password;
+
+        const updatedUser = await user.save();
+        const { password: _, ...userObj } = updatedUser.toObject();
+        res.json(userObj);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }

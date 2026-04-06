@@ -1,11 +1,11 @@
 import express from 'express';
 import { protect, admin } from '../middleware/auth.js';
 
-// User management
+    // User management
 import { getUsers, getUserById, createUser, updateUser, deleteUser } from '../controllers/adminController.js';
 
 // Room management
-import { getRooms, getRoomById, updateRoom, deleteRoom } from '../controllers/roomController.js';
+import { getRooms, getRoomById, updateRoom, deleteRoom, updateRoomStatusByNumber } from '../controllers/roomController.js';
 
 // Booking management
 import {
@@ -20,7 +20,7 @@ import {
 import { getStaff, getStaffById, createStaff, updateStaff, deleteStaff } from '../controllers/staffController.js';
 
 // Reports
-import { getReportSummary, getMonthlyRevenue as getMonthlyReport } from '../controllers/reportController.js';
+import { getReportSummary, getMonthlyRevenue as getMonthlyReport, getBookingReport } from '../controllers/reportController.js';
 
 // Package management
 import {
@@ -33,43 +33,45 @@ import {
 
 const router = express.Router();
 
-// All routes require a valid JWT token + admin role
+
 router.use(protect, admin);
 
-// ── Dashboard ────────────────────────────────────────────────
+//Dashboard 
 router.get('/stats', getDashboardStats);
 router.get('/revenue/monthly', getMonthlyRevenue);
 
-// ── Users ────────────────────────────────────────────────────
+//Users 
 router.get('/users', getUsers);
 router.get('/users/:id', getUserById);
 router.post('/users', createUser);
 router.put('/users/:id', updateUser);
 router.delete('/users/:id', deleteUser);
 
-// ── Rooms ────────────────────────────────────────────────────
+//Rooms
 router.get('/rooms', getRooms);
 router.get('/rooms/:id', getRoomById);
 router.put('/rooms/:id', updateRoom);
+router.put('/rooms/number/:roomNumber/status', updateRoomStatusByNumber);
 router.delete('/rooms/:id', deleteRoom);
 
-// ── Bookings ─────────────────────────────────────────────────
+//Bookings
 router.get('/bookings', getBookings);
 router.get('/bookings/:id', getBookingById);
 router.put('/bookings/:id/status', updateBookingStatus);
 
-// ── Staff ────────────────────────────────────────────────────
+//Staff
 router.get('/staff', getStaff);
 router.get('/staff/:id', getStaffById);
 router.post('/staff', createStaff);
 router.put('/staff/:id', updateStaff);
 router.delete('/staff/:id', deleteStaff);
 
-// ── Reports ──────────────────────────────────────────────────
+//Reports
 router.get('/reports/summary', getReportSummary);
 router.get('/reports/monthly', getMonthlyReport);
+router.get('/reports/bookings', getBookingReport);
 
-// ── Packages ─────────────────────────────────────────────────
+//Packages
 router.get('/packages', getPackages);
 router.get('/packages/:id', getPackageById);
 router.post('/packages', createPackage);

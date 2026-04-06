@@ -15,21 +15,20 @@ export const getRoomsByCategory = async (req, res) => {
 
     const rooms = await Room.find(filter);
 
-    // If dates are provided OR check current availability by default
+
     const start = checkIn ? new Date(checkIn) : new Date();
     const end = checkOut ? new Date(checkOut) : new Date();
     
-    // For "current status" check when no dates provided, set to 00:00:00 to match booking logic
+
     if (!checkIn) {
       start.setHours(0,0,0,0);
       end.setHours(23,59,59,999);
     }
 
-    // Find all rooms in this category
+
     const roomIds = rooms.map(r => r._id);
     
-    // We need to check availability against ALL rooms with the same roomNumber
-    // because one physical room might have multiple "Room" objects for different packages
+
     const roomNumbers = rooms.map(r => r.roomNumber);
     const allRelatedRooms = await Room.find({ roomNumber: { $in: roomNumbers } });
     const allRelatedIds = allRelatedRooms.map(r => r._id);
@@ -43,7 +42,7 @@ export const getRoomsByCategory = async (req, res) => {
     });
 
     const roomsWithAvailability = rooms.map(room => {
-      // Find all IDs for this specific room number
+      
       const relatedIds = allRelatedRooms
         .filter(r => r.roomNumber === room.roomNumber)
         .map(r => r._id.toString());
@@ -82,11 +81,11 @@ export const checkRoomAvailability = async (req, res) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    // Find all room objects that represent this same physical room
+    
     const relatedRooms = await Room.find({ roomNumber: room.roomNumber });
     const relatedIds = relatedRooms.map(r => r._id);
 
-    // Rule: Room is unavailable if RequestedIn <= Existing Checkout
+
     const overlappingBooking = await Booking.findOne({
       room: { $in: relatedIds },
       status: { $in: ['confirmed', 'pending'] },
@@ -168,6 +167,31 @@ export const updateRoom = async (req, res) => {
   }
 };
 
+// update room status by room number
+export const updateRoomStatusByNumber = async (req, res) => {
+  try {
+    const { roomNumber } = req.params;
+    const { status } = req.body;
+    
+    if (!['available', 'occupied', 'maintenance'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status' });
+    }
+
+    const result = await Room.updateMany(
+      { roomNumber },
+      { $set: { status } }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: 'No rooms found with this room number' });
+    }
+
+    res.json({ message: `Updated ${result.modifiedCount} room(s) to ${status}` });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // DELETE room
 export const deleteRoom = async (req, res) => {
   try {
@@ -179,13 +203,13 @@ export const deleteRoom = async (req, res) => {
   }
 };
 
-// GET ALL for public (Gallery)
+
 export const getAllRoomsPublic = async (req, res) => {
   try {
     const rooms = await Room.find({}, 'name images type');
     res.json(rooms);
   } catch (error) {
-    // console.error('Error fetching all rooms for gallery:', error.message);
+    
     res.status(500).json({ message: 'Server error while fetching gallery rooms' });
   }
 };
