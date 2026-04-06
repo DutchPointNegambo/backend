@@ -48,10 +48,10 @@ export const getUserById = async (req, res) => {
 // POST create user (admin)
 export const createUser = async (req, res) => {
     try {
-        const { firstName, lastName, email, phone, password, role } = req.body;
+        const { firstName, lastName, email, phone, password, role, status, location } = req.body;
 
-        if (!firstName || !lastName || !email || !phone || !password) {
-            return res.status(400).json({ message: 'All fields are required' });
+        if (!firstName || !email || !password) {
+            return res.status(400).json({ message: 'First name, email, and password are required' });
         }
 
         const exists = await User.findOne({ email: email.toLowerCase() });
@@ -59,11 +59,13 @@ export const createUser = async (req, res) => {
 
         const user = await User.create({
             firstName,
-            lastName,
+            lastName: lastName || '',
             email: email.toLowerCase(),
             phone,
             password,
             role: role || 'guest',
+            status: status || 'Active',
+            location: location || '',
         });
 
         const { password: _, ...userObj } = user.toObject();
@@ -72,6 +74,7 @@ export const createUser = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
 
 
 export const updateUser = async (req, res) => {
