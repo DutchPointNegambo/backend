@@ -22,6 +22,9 @@ import { getStaff, getStaffById, createStaff, updateStaff, deleteStaff } from '.
 // Reports
 import { getReportSummary, getMonthlyRevenue as getMonthlyReport, getBookingReport } from '../controllers/reportController.js';
 
+// Audit & Notifications
+import { getNotifications, markAsRead, markAllAsRead } from '../controllers/notificationController.js';
+
 // Package management
 import {
     getPackages,
@@ -70,6 +73,11 @@ router.delete('/staff/:id', deleteStaff);
 router.get('/reports/summary', getReportSummary);
 router.get('/reports/monthly', getMonthlyReport);
 router.get('/reports/bookings', getBookingReport);
+
+// Audit & Notifications
+router.get('/notifications', getNotifications);
+router.put('/notifications/read-all', markAllAsRead);
+router.put('/notifications/:id/read', markAsRead);
 
 //Packages
 router.get('/packages', getPackages);

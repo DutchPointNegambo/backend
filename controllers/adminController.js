@@ -48,7 +48,7 @@ export const getUserById = async (req, res) => {
 // POST create user (admin)
 export const createUser = async (req, res) => {
     try {
-        const { firstName, lastName, email, phone, password, role, status, location } = req.body;
+        const { firstName, lastName, email, phone, password, role, status } = req.body;
 
         if (!firstName || !email || !password) {
             return res.status(400).json({ message: 'First name, email, and password are required' });
@@ -65,7 +65,6 @@ export const createUser = async (req, res) => {
             password,
             role: role || 'guest',
             status: status || 'Active',
-            location: location || '',
         });
 
         const { password: _, ...userObj } = user.toObject();
@@ -79,7 +78,7 @@ export const createUser = async (req, res) => {
 
 export const updateUser = async (req, res) => {
     try {
-        const { password, firstName, lastName, email, phone, role, status, location } = req.body;
+        const { password, firstName, lastName, email, phone, role, status } = req.body;
 
         const user = await User.findById(req.params.id);
         if (!user) return res.status(404).json({ message: 'User not found' });
@@ -90,7 +89,6 @@ export const updateUser = async (req, res) => {
         if (phone) user.phone = phone;
         if (role) user.role = role;
         if (status) user.status = status;
-        if (location !== undefined) user.location = location;
         if (password) user.password = password;
 
         const updatedUser = await user.save();

@@ -121,8 +121,36 @@ export const getRooms = async (req, res) => {
       .skip((page - 1) * parseInt(limit))
       .limit(parseInt(limit));
 
+    // DYNAMIC STATUS SYNC
+    // Check bookings to determine if room should be marked 'occupied'
+    const now = new Date();
+    const roomsWithStatus = await Promise.all(rooms.map(async (room) => {
+      const roomObj = room.toObject();
+      roomObj.dbStatus = room.status; // Keep track of the actual DB status
+      
+      // Only check for bookings if it's not already in maintenance
+      if (roomObj.status !== 'maintenance') {
+        const relatedRooms = await Room.find({ roomNumber: room.roomNumber });
+        const relatedIds = relatedRooms.map(r => r._id);
+
+        const activeBooking = await Booking.findOne({
+          room: { $in: relatedIds },
+          status: { $in: ['confirmed', 'pending'] },
+          checkIn: { $lte: now },
+          checkOut: { $gte: now }
+        }).populate('user', 'firstName lastName email').select('+bookingId');
+
+        if (activeBooking) {
+          roomObj.status = 'occupied';
+          roomObj.activeBooking = activeBooking;
+        }
+      }
+
+      return roomObj;
+    }));
+
     res.json({
-      rooms,
+      rooms: roomsWithStatus,
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
@@ -197,6 +225,7 @@ export const deleteRoom = async (req, res) => {
   try {
     const room = await Room.findByIdAndDelete(req.params.id);
     if (!room) return res.status(404).json({ message: 'Room not found' });
+
     res.json({ message: 'Room deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: error.message });
