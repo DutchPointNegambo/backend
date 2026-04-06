@@ -1,22 +1,67 @@
 import Room from '../models/Room.js';
+import Booking from '../models/Booking.js';
+
 
 
 export const getRoomsByCategory = async (req, res) => {
   try {
     const { category } = req.params;
-    const { package: pkg } = req.query;
+    const { package: pkg, checkIn, checkOut } = req.query;
     const filter = {};
     if (category && category !== 'all') {
       filter.type = category;
     }
     if (pkg) filter.package = pkg;
-    // console.log('Fetching rooms with filter:', JSON.stringify(filter, null, 2));
+
     const rooms = await Room.find(filter);
-    // console.log(`Found ${rooms.length} rooms for filter:`, JSON.stringify(filter));
-    res.json(rooms);
+
+    // If dates are provided OR check current availability by default
+    const start = checkIn ? new Date(checkIn) : new Date();
+    const end = checkOut ? new Date(checkOut) : new Date();
+    
+    // For "current status" check when no dates provided, set to 00:00:00 to match booking logic
+    if (!checkIn) {
+      start.setHours(0,0,0,0);
+      end.setHours(23,59,59,999);
+    }
+
+    // Find all rooms in this category
+    const roomIds = rooms.map(r => r._id);
+    
+    // We need to check availability against ALL rooms with the same roomNumber
+    // because one physical room might have multiple "Room" objects for different packages
+    const roomNumbers = rooms.map(r => r.roomNumber);
+    const allRelatedRooms = await Room.find({ roomNumber: { $in: roomNumbers } });
+    const allRelatedIds = allRelatedRooms.map(r => r._id);
+
+    const bookings = await Booking.find({
+      room: { $in: allRelatedIds },
+      status: { $in: ['confirmed', 'pending'] },
+      $or: [
+        { checkIn: { $lte: end }, checkOut: { $gte: start } }
+      ]
+    });
+
+    const roomsWithAvailability = rooms.map(room => {
+      // Find all IDs for this specific room number
+      const relatedIds = allRelatedRooms
+        .filter(r => r.roomNumber === room.roomNumber)
+        .map(r => r._id.toString());
+        
+      const isOccupied = bookings.some(b => 
+        relatedIds.includes(b.room.toString())
+      );
+
+      return {
+        ...room.toObject(),
+        isAvailable: !isOccupied
+      };
+    });
+
+    return res.json(roomsWithAvailability);
   } catch (error) {
-    // console.error('Error fetching rooms by category:', error.message);
-    res.status(500).json({ message: 'Server error while fetching rooms' });
+    console.error('getRoomsByCategory error:', error);
+    res.status(500).json({ message: 'Server error while fetching rooms with availability' });
   }
 };
 
@@ -25,18 +70,33 @@ export const checkRoomAvailability = async (req, res) => {
   try {
     const { roomId, checkIn, checkOut } = req.body;
 
+    if (!checkIn || !checkOut) {
+      return res.status(400).json({ message: 'Check-in and check-out dates are required' });
+    }
+
+    const start = new Date(checkIn);
+    const end = new Date(checkOut);
+
     const room = await Room.findById(roomId);
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    // Check availability with the same roomNumber
-    const roomsWithSameNumber = await Room.find({ roomNumber: room.roomNumber });
-    const isAnyOccupied = roomsWithSameNumber.some(r => r.status !== 'available');
+    // Find all room objects that represent this same physical room
+    const relatedRooms = await Room.find({ roomNumber: room.roomNumber });
+    const relatedIds = relatedRooms.map(r => r._id);
 
-    res.json({ available: !isAnyOccupied });
+    // Rule: Room is unavailable if RequestedIn <= Existing Checkout
+    const overlappingBooking = await Booking.findOne({
+      room: { $in: relatedIds },
+      status: { $in: ['confirmed', 'pending'] },
+      $or: [
+        { checkIn: { $lte: end }, checkOut: { $gte: start } }
+      ]
+    });
+
+    res.json({ available: !overlappingBooking });
   } catch (error) {
-    // console.error('Error checking room availability:', error.message);
     res.status(500).json({ message: 'Server error while checking availability' });
   }
 };
