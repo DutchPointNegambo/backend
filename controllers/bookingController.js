@@ -43,9 +43,11 @@ export const createBooking = async (req, res) => {
         }
 
         // 4. Calculate nights and total
+        const isDayUse = room.package === 'day-use';
         const diffTime = Math.abs(endDate - startDate);
-        const nights = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        const subtotal = room.price * nights;
+        const nights = isDayUse ? 0 : Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        // Day-use packages are charged a flat per-booking rate; full-board uses nights × price
+        const subtotal = isDayUse ? room.price : room.price * nights;
         const total = subtotal; // For now no discounts
 
         // 4. Create booking
