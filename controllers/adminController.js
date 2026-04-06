@@ -48,10 +48,10 @@ export const getUserById = async (req, res) => {
 // POST create user (admin)
 export const createUser = async (req, res) => {
     try {
-        const { firstName, lastName, email, phone, password, role } = req.body;
+        const { firstName, lastName, email, phone, password, role, status } = req.body;
 
-        if (!firstName || !lastName || !email || !phone || !password) {
-            return res.status(400).json({ message: 'All fields are required' });
+        if (!firstName || !email || !password) {
+            return res.status(400).json({ message: 'First name, email, and password are required' });
         }
 
         const exists = await User.findOne({ email: email.toLowerCase() });
@@ -59,11 +59,12 @@ export const createUser = async (req, res) => {
 
         const user = await User.create({
             firstName,
-            lastName,
+            lastName: lastName || '',
             email: email.toLowerCase(),
             phone,
             password,
             role: role || 'guest',
+            status: status || 'Active',
         });
 
         const { password: _, ...userObj } = user.toObject();
@@ -74,17 +75,25 @@ export const createUser = async (req, res) => {
 };
 
 
+
 export const updateUser = async (req, res) => {
     try {
-        const { password, ...updates } = req.body;
+        const { password, firstName, lastName, email, phone, role, status } = req.body;
 
-        const user = await User.findByIdAndUpdate(req.params.id, updates, {
-            new: true,
-            runValidators: true,
-        }).select('-password');
-
+        const user = await User.findById(req.params.id);
         if (!user) return res.status(404).json({ message: 'User not found' });
-        res.json(user);
+
+        if (firstName) user.firstName = firstName;
+        if (lastName) user.lastName = lastName;
+        if (email) user.email = email.toLowerCase();
+        if (phone) user.phone = phone;
+        if (role) user.role = role;
+        if (status) user.status = status;
+        if (password) user.password = password;
+
+        const updatedUser = await user.save();
+        const { password: _, ...userObj } = updatedUser.toObject();
+        res.json(userObj);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
