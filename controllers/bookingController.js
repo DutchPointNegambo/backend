@@ -1,6 +1,84 @@
 import Booking from '../models/Booking.js';
 import Room from '../models/Room.js';
 import User from '../models/User.js';
+import crypto from 'crypto';
+
+export const createBooking = async (req, res) => {
+    try {
+        const {
+            userId,
+            roomId,
+            checkIn,
+            checkOut,
+            guests,
+            guestInfo,
+            paymentMethod
+        } = req.body;
+
+        // 1. Validate room exists
+        const room = await Room.findById(roomId);
+        if (!room) {
+            return res.status(404).json({ message: 'Room not found' });
+        }
+
+        // 2. Prepare dates
+        const startDate = new Date(checkIn);
+        const endDate = new Date(checkOut);
+
+        // Find all rooms in this category that represent this same physical room
+        const relatedRooms = await Room.find({ roomNumber: room.roomNumber });
+        const relatedIds = relatedRooms.map(r => r._id);
+
+        // 3. Check for overlapping bookings
+        const overlappingBooking = await Booking.findOne({
+            room: { $in: relatedIds },
+            status: { $in: ['confirmed', 'pending'] },
+            $or: [
+                { checkIn: { $lte: endDate }, checkOut: { $gte: startDate } }
+            ]
+        });
+
+        if (overlappingBooking) {
+            return res.status(400).json({ message: 'Room is already booked for these dates' });
+        }
+
+        // 4. Calculate nights and total
+        const diffTime = Math.abs(endDate - startDate);
+        const nights = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const subtotal = room.price * nights;
+        const total = subtotal; // For now no discounts
+
+        // 4. Create booking
+        const bookingId = `BK-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+        
+        const booking = await Booking.create({
+            bookingId,
+            user: userId || null, // Allow guest checkout if no userId
+            guestInfo,
+            room: roomId,
+            checkIn: startDate,
+            checkOut: endDate,
+            guests,
+            nights,
+            subtotal,
+            total,
+            status: 'confirmed', // Auto-confirm for simple version
+            paymentMethod: paymentMethod || 'onsite'
+        });
+
+        // 5. Update room status if booking starts today
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (startDate <= today && endDate > today) {
+            await Room.updateMany({ roomNumber: room.roomNumber }, { status: 'occupied' });
+        }
+
+        res.status(201).json(booking);
+    } catch (error) {
+        console.error('Create Booking Error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
 
 
 export const getBookings = async (req, res) => {
