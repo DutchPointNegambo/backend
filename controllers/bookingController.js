@@ -2,6 +2,7 @@ import Booking from '../models/Booking.js';
 import Room from '../models/Room.js';
 import User from '../models/User.js';
 import crypto from 'crypto';
+import { createNotification } from './notificationController.js';
 
 export const createBooking = async (req, res) => {
     try {
@@ -64,7 +65,7 @@ export const createBooking = async (req, res) => {
             nights,
             subtotal,
             total,
-            status: 'confirmed', // Auto-confirm for simple version
+            status: 'pending', // Default to pending
             paymentMethod: paymentMethod || 'onsite'
         });
 
@@ -74,6 +75,18 @@ export const createBooking = async (req, res) => {
         if (startDate <= today && endDate > today) {
             await Room.updateMany({ roomNumber: room.roomNumber }, { status: 'occupied' });
         }
+
+        // 6. Create notification for admin
+        const guestName = guestInfo?.firstName
+            ? `${guestInfo.firstName} ${guestInfo.lastName || ''}`
+            : 'A guest';
+        await createNotification({
+            type: 'NEW_BOOKING',
+            title: 'New Booking Received',
+            message: `${guestName} booked Room ${room.roomNumber} (${room.type}) for ${nights} night(s). Total: $${total}`,
+            link: `/admin/bookings`,
+            metadata: { bookingId: booking._id, roomNumber: room.roomNumber }
+        });
 
         res.status(201).json(booking);
     } catch (error) {
@@ -85,10 +98,11 @@ export const createBooking = async (req, res) => {
 
 export const getBookings = async (req, res) => {
     try {
-        const { status, page = 1, limit = 20, from, to } = req.query;
+        const { status, page = 1, limit = 20, from, to, userId } = req.query;
         const query = {};
 
         if (status && status !== 'all') query.status = status;
+        if (userId) query.user = userId;
         if (from || to) {
             query.checkIn = {};
             if (from) query.checkIn.$gte = new Date(from);
@@ -98,7 +112,7 @@ export const getBookings = async (req, res) => {
         const total = await Booking.countDocuments(query);
         const bookings = await Booking.find(query)
             .populate('user', 'firstName lastName email phone')
-            .populate('room', 'name type price image')
+            .populate('room', 'name type price image roomNumber')
             .sort({ createdAt: -1 })
             .skip((page - 1) * parseInt(limit))
             .limit(parseInt(limit));
@@ -119,7 +133,7 @@ export const getBookingById = async (req, res) => {
     try {
         const booking = await Booking.findById(req.params.id)
             .populate('user', 'firstName lastName email phone')
-            .populate('room', 'name type price image');
+            .populate('room', 'name type price image roomNumber');
         if (!booking) return res.status(404).json({ message: 'Booking not found' });
         res.json(booking);
     } catch (error) {
@@ -136,6 +150,9 @@ export const updateBookingStatus = async (req, res) => {
             return res.status(400).json({ message: 'Invalid status value' });
         }
 
+        const oldBooking = await Booking.findById(req.params.id);
+        const oldStatus = oldBooking?.status;
+
         const booking = await Booking.findByIdAndUpdate(
             req.params.id,
             { status },
@@ -145,6 +162,21 @@ export const updateBookingStatus = async (req, res) => {
             .populate('room', 'name type');
 
         if (!booking) return res.status(404).json({ message: 'Booking not found' });
+
+        // Notification for cancellation
+        if (status === 'cancelled') {
+            const guestName = booking.user
+                ? `${booking.user.firstName} ${booking.user.lastName}`
+                : 'A guest';
+            await createNotification({
+                type: 'BOOKING_CANCELLED',
+                title: 'Booking Cancelled',
+                message: `Booking ${booking.bookingId || booking._id} by ${guestName} has been cancelled.`,
+                link: '/admin/bookings',
+                metadata: { bookingId: booking._id }
+            });
+        }
+
         res.json(booking);
     } catch (error) {
         res.status(500).json({ message: error.message });

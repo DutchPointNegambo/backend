@@ -88,3 +88,24 @@ export const getMonthlyRevenue = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+export const getBookingReport = async (req, res) => {
+    try {
+        const { from, to } = req.query;
+        const dateFilter = {};
+        if (from || to) {
+            dateFilter.createdAt = {};
+            if (from) dateFilter.createdAt.$gte = new Date(from);
+            if (to) dateFilter.createdAt.$lte = new Date(to);
+        }
+
+        const bookings = await Booking.find(dateFilter)
+            .populate('user', 'firstName lastName email phone')
+            .populate('room', 'name type roomNumber')
+            .sort({ createdAt: -1 });
+
+        res.json(bookings);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
