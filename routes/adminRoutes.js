@@ -23,7 +23,7 @@ import { getStaff, getStaffById, createStaff, updateStaff, deleteStaff } from '.
 import { getReportSummary, getMonthlyRevenue as getMonthlyReport, getBookingReport } from '../controllers/reportController.js';
 
 // Audit & Notifications
-import { getNotifications, markAsRead, markAllAsRead } from '../controllers/notificationController.js';
+import { getNotifications, markAsRead, markAllAsRead, deleteNotification, deleteAllRead } from '../controllers/notificationController.js';
 
 // Package management
 import {
@@ -33,6 +33,10 @@ import {
     updatePackage,
     deletePackage,
 } from '../controllers/packageController.js';
+
+// Contact management
+import { getContacts, updateContactStatus, deleteContact } from '../controllers/contactController.js';
+
 
 const router = express.Router();
 
@@ -77,7 +81,10 @@ router.get('/reports/bookings', getBookingReport);
 // Audit & Notifications
 router.get('/notifications', getNotifications);
 router.put('/notifications/read-all', markAllAsRead);
+router.delete('/notifications/delete-read', deleteAllRead);
 router.put('/notifications/:id/read', markAsRead);
+router.delete('/notifications/:id', deleteNotification);
+
 
 //Packages
 router.get('/packages', getPackages);
@@ -85,5 +92,11 @@ router.get('/packages/:id', getPackageById);
 router.post('/packages', createPackage);
 router.put('/packages/:id', updatePackage);
 router.delete('/packages/:id', deletePackage);
+
+//Contact/Feedback
+router.get('/contacts', getContacts);
+router.put('/contacts/:id/status', updateContactStatus);
+router.delete('/contacts/:id', deleteContact);
+
 
 export default router;

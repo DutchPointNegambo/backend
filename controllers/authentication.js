@@ -1,5 +1,7 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import sendEmail from '../utils/sendEmail.js';
+import crypto from 'crypto';
 
 const generateToken = (id, accountType = 'local') => {
     return jwt.sign({ id, accountType }, process.env.JWT_SECRET, {
@@ -211,9 +213,9 @@ export const updateUserProfile = async (req, res) => {
         const user = await User.findById(req.user._id);
 
         if (user) {
-            user.firstName = req.body.firstName || user.firstName;
-            user.lastName = req.body.lastName || user.lastName;
-            user.phone = req.body.phone || user.phone;
+            user.firstName = req.body.firstName?.trim() || user.firstName;
+            user.lastName = req.body.lastName?.trim() || user.lastName;
+            user.phone = req.body.phone?.trim() || user.phone;
 
             if (!isGoogleUser && req.body.password) {
                 user.password = req.body.password;
@@ -238,5 +240,128 @@ export const updateUserProfile = async (req, res) => {
     } catch (error) {
         logServerError('updateUserProfile', error);
         res.status(500).json({ message: 'Failed to update profile.' });
+    }
+};
+
+// @desc    Forgot Password - Send OTP
+// @route   POST /api/auth/forgot-password
+// @access  Public
+export const forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+        const user = await User.findOne({ email });
+
+        if (!user) {
+            return res.status(404).json({ message: 'This email is not registered. Please sign up first.' });
+        }
+
+        // Generate 6-digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        
+        // Hash OTP and set expiry (10 minutes)
+        user.resetOtp = crypto.createHash('sha256').update(otp).digest('hex');
+        user.resetOtpExpires = Date.now() + 10 * 60 * 1000;
+
+        await user.save();
+
+        const message = `Your password reset OTP is: ${otp}. It is valid for 10 minutes.`;
+
+        try {
+            await sendEmail({
+                email: user.email,
+                subject: 'Password Reset OTP - Dutch Point Resort',
+                message,
+                html: `
+                    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                        <h2 style="color: #0f172a;">Password Reset</h2>
+                        <p>Hi ${user.firstName},</p>
+                        <p>You requested to reset your password. Use the OTP code below to proceed:</p>
+                        <div style="background: #f1f5f9; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
+                            <h1 style="letter-spacing: 10px; color: #0d9488; margin: 0;">${otp}</h1>
+                        </div>
+                        <p>This code is valid for <strong>10 minutes</strong>. If you did not request this, please ignore this email.</p>
+                        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                        <p style="font-size: 12px; color: #64748b;">Dutch Point Resort Negombo</p>
+                    </div>
+                `,
+            });
+
+            res.status(200).json({ message: 'OTP sent to email' });
+        } catch (error) {
+            user.resetOtp = undefined;
+            user.resetOtpExpires = undefined;
+            await user.save();
+            logServerError('forgotPassword-email', error);
+            return res.status(500).json({ message: 'Email could not be sent' });
+        }
+    } catch (error) {
+        logServerError('forgotPassword', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// @desc    Verify OTP
+// @route   POST /api/auth/verify-otp
+// @access  Public
+export const verifyOTP = async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+        
+        if (!email || !otp) {
+            return res.status(400).json({ message: 'Email and OTP are required' });
+        }
+
+        const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
+
+        const user = await User.findOne({
+            email,
+            resetOtp: hashedOtp,
+            resetOtpExpires: { $gt: Date.now() },
+        });
+
+        if (!user) {
+            return res.status(400).json({ message: 'Invalid or expired OTP' });
+        }
+
+        res.status(200).json({ message: 'OTP verified successfully' });
+    } catch (error) {
+        logServerError('verifyOTP', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// @desc    Reset Password using OTP
+// @route   POST /api/auth/reset-password
+// @access  Public
+export const resetPassword = async (req, res) => {
+    try {
+        const { email, otp, password } = req.body;
+
+        const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
+
+        const user = await User.findOne({
+            email,
+            resetOtp: hashedOtp,
+            resetOtpExpires: { $gt: Date.now() },
+        });
+
+        if (!user) {
+            return res.status(400).json({ message: 'Invalid or expired OTP' });
+        }
+
+        // Set new password
+        user.password = password;
+        user.resetOtp = undefined;
+        user.resetOtpExpires = undefined;
+
+        await user.save();
+
+        res.status(200).json({
+            message: 'Password reset successful',
+            token: generateToken(user._id, user.googleId ? 'google' : 'local')
+        });
+    } catch (error) {
+        logServerError('resetPassword', error);
+        res.status(500).json({ message: 'Server error' });
     }
 };
