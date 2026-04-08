@@ -49,6 +49,12 @@ const userSchema = new mongoose.Schema({
         enum: ['Active', 'Inactive', 'Suspended'],
         default: 'Active',
     },
+    resetOtp: {
+        type: String,
+    },
+    resetOtpExpires: {
+        type: Date,
+    },
 }, {
     timestamps: true
 })
