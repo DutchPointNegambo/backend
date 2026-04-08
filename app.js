@@ -1,0 +1,52 @@
+import express from 'express';
+import dotenv from 'dotenv';
+import cors from 'cors';
+import authRoutes from './routes/authRoutes.js';
+import contactRoutes from './routes/contactRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
+import roomRoutes from './routes/roomRoutes.js';
+import packageRoutes from './routes/packageRoutes.js';
+import bookingRoutes from './routes/bookingRoutes.js';
+import eventBookingRoutes from './routes/eventBookingRoutes.js';
+import connectDB from './config/database.js';
+
+dotenv.config();
+
+// Connect to Database
+connectDB();
+
+const app = express();
+
+const allowedOrigins = [
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:3000',
+    process.env.FRONTEND_URL
+].filter(Boolean);
+
+app.use(cors({
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true
+}));
+
+app.use(express.json());
+
+app.use('/api/auth', authRoutes);
+app.use('/api/contact', contactRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/rooms', roomRoutes);
+app.use('/api/packages', packageRoutes);
+app.use('/api/bookings', bookingRoutes);
+app.use('/api/event-bookings', eventBookingRoutes);
+
+app.get('/api/health', (req, res) => {
+    res.json({ message: 'API is running' });
+});
+
+export default app;
