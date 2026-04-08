@@ -213,9 +213,9 @@ export const updateUserProfile = async (req, res) => {
         const user = await User.findById(req.user._id);
 
         if (user) {
-            user.firstName = req.body.firstName || user.firstName;
-            user.lastName = req.body.lastName || user.lastName;
-            user.phone = req.body.phone || user.phone;
+            user.firstName = req.body.firstName?.trim() || user.firstName;
+            user.lastName = req.body.lastName?.trim() || user.lastName;
+            user.phone = req.body.phone?.trim() || user.phone;
 
             if (!isGoogleUser && req.body.password) {
                 user.password = req.body.password;

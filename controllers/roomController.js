@@ -128,16 +128,27 @@ export const getRooms = async (req, res) => {
       const roomObj = room.toObject();
       roomObj.dbStatus = room.status; // Keep track of the actual DB status
       
-      // Only check for bookings if it's not already in maintenance
+      // DYNAMIC STATUS SYNC
+      // Mark as occupied if there's an active booking today
       if (roomObj.status !== 'maintenance') {
         const relatedRooms = await Room.find({ roomNumber: room.roomNumber });
         const relatedIds = relatedRooms.map(r => r._id);
 
+        const startOfToday = new Date();
+        startOfToday.setHours(0,0,0,0);
+        const endOfToday = new Date();
+        endOfToday.setHours(23,59,59,999);
+
+        // Find any active booking or one that starts today
         const activeBooking = await Booking.findOne({
           room: { $in: relatedIds },
           status: { $in: ['confirmed', 'pending'] },
-          checkIn: { $lte: now },
-          checkOut: { $gte: now }
+          $or: [
+            // Currently staying
+            { checkIn: { $lte: now }, checkOut: { $gte: now } },
+            // Starting today
+            { checkIn: { $gte: startOfToday, $lte: endOfToday } }
+          ]
         }).populate('user', 'firstName lastName email').select('+bookingId');
 
         if (activeBooking) {
