@@ -6,6 +6,9 @@ const connectDB = async () => {
         console.log(`MongoDB Connected: ${conn.connection.host}`);
     } catch (error) {
         console.error(`Error: ${error.message}`);
+        if (error.message.includes('ECONNREFUSED')) {
+            console.error('CRITICAL: Check your IP Whitelist in MongoDB Atlas.');
+        }
         process.exit(1);
     }
 };
