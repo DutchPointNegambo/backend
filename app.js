@@ -8,6 +8,7 @@ import adminRoutes from './routes/adminRoutes.js';
 import roomRoutes from './routes/roomRoutes.js';
 import packageRoutes from './routes/packageRoutes.js';
 import bookingRoutes from './routes/bookingRoutes.js';
+import orderRoutes from './routes/orderRoutes.js';
 
 dotenv.config();
 
@@ -23,6 +24,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/packages', packageRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/orders', orderRoutes);
 
 app.get('/api/health', (req, res) => {
     res.json({ message: 'API is running' });
