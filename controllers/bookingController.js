@@ -69,14 +69,7 @@ export const createBooking = async (req, res) => {
             paymentMethod: paymentMethod || 'onsite'
         });
 
-        // 5. Update room status if booking starts today
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        if (startDate <= today && endDate > today) {
-            await Room.updateMany({ roomNumber: room.roomNumber }, { status: 'occupied' });
-        }
-
-        // 6. Create notification for admin
+        // 5. Create notification for admin
         const guestName = guestInfo?.firstName
             ? `${guestInfo.firstName} ${guestInfo.lastName || ''}`
             : 'A guest';
@@ -198,7 +191,7 @@ export const getDashboardStats = async (req, res) => {
             Booking.countDocuments({ status: 'pending' }),
             Booking.countDocuments({ status: 'confirmed' }),
             User.countDocuments({ role: 'guest' }),
-            Room.countDocuments({ status: 'available' }),
+            Room.countDocuments({ status: { $ne: 'maintenance' } }),
             Booking.aggregate([
                 { $match: { status: { $in: ['confirmed', 'completed'] } } },
                 { $group: { _id: null, total: { $sum: '$total' } } },
