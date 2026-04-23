@@ -17,7 +17,7 @@ import {
 } from '../controllers/bookingController.js';
 
 // Staff management
-import { getStaff, getStaffById, createStaff, updateStaff, deleteStaff } from '../controllers/staffController.js';
+import { getEmployees as getStaff, createEmployee as createStaff, updateEmployee as updateStaff, deleteEmployee as deleteStaff } from '../controllers/employeeController.js';
 
 // Reports
 import { getReportSummary, getMonthlyRevenue as getMonthlyReport, getBookingReport } from '../controllers/reportController.js';
@@ -68,7 +68,6 @@ router.put('/bookings/:id/status', updateBookingStatus);
 
 //Staff
 router.get('/staff', getStaff);
-router.get('/staff/:id', getStaffById);
 router.post('/staff', createStaff);
 router.put('/staff/:id', updateStaff);
 router.delete('/staff/:id', deleteStaff);
