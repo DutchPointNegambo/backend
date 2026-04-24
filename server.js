@@ -1,15 +1,29 @@
-import app from './app.js';
-import mongoose from 'mongoose';
-import dotenv from 'dotenv';
 import dns from 'dns';
+import dotenv from 'dotenv';
 
+// 1. Load environment variables
 dotenv.config();
 
-// Force Node.js to use Google DNS to bypass local connection issues
+// 2. Force Node.js to use Google DNS to bypass local connection issues (e.g. SRV resolution)
 dns.setServers(['8.8.8.8', '8.8.4.4']);
+
+// 3. Import app and connectDB
+import app from './app.js';
+import connectDB from './config/database.js';
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+// 4. Connect to Database then start server
+const startServer = async () => {
+    try {
+        await connectDB();
+        app.listen(PORT, () => {
+            console.log(`Server running on port ${PORT}`);
+        });
+    } catch (error) {
+        console.error('Failed to start server:', error);
+        // process.exit(1); // Don't exit immediately so nodemon can watch for changes
+    }
+};
+
+startServer();
