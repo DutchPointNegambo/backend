@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import authRoutes from './routes/authRoutes.js';
 import employeeRoutes from './routes/employeeRoutes.js';
+import staffSelfRoutes from './routes/staffSelfRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import roomRoutes from './routes/roomRoutes.js';
@@ -15,7 +16,7 @@ import connectDB from './config/database.js';
 dotenv.config();
 
 // Connect to Database
-connectDB();
+// connectDB(); // Moved to server.js
 
 const app = express();
 
@@ -40,6 +41,7 @@ app.use(cors({
 app.use(express.json());
 
 app.use('/api/auth', authRoutes);
+app.use('/api/staff', staffSelfRoutes);
 app.use('/api/admin', employeeRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/admin', adminRoutes);

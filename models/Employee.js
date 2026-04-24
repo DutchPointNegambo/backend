@@ -44,12 +44,30 @@ const employeeSchema = new mongoose.Schema({
     hireDate: {
         type: Date,
     },
+    password: {
+        type: String,
+    },
+    user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+    },
+    annualLeaveBalance: {
+        type: Number,
+        default: 14,
+    },
 }, {
     timestamps: true,
 });
 
 // Auto-generate employeeId before saving
 employeeSchema.pre('save', async function (next) {
+    // Hash password if modified
+    if (this.isModified('password') && this.password) {
+        const bcrypt = await import('bcryptjs');
+        const salt = await bcrypt.default.genSalt(10);
+        this.password = await bcrypt.default.hash(this.password, salt);
+    }
+
     if (this.employeeId) return next();
 
     const Employee = mongoose.model('Employee');

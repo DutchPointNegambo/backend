@@ -34,10 +34,78 @@ export const createOrder = async (req, res) => {
 
 export const getOrders = async (req, res) => {
     try {
-        const orders = await Order.find().sort({ createdAt: -1 });
+        const { status, search } = req.query;
+        let query = {};
+
+        if (status && status !== 'all') {
+            query.status = status;
+        }
+
+        if (search) {
+            query.$or = [
+                { 'guestInfo.name': { $regex: search, $options: 'i' } },
+                { 'guestInfo.email': { $regex: search, $options: 'i' } },
+                { '_id': search.match(/^[0-9a-fA-F]{24}$/) ? search : undefined }
+            ].filter(Boolean);
+        }
+
+        const orders = await Order.find(query).sort({ createdAt: -1 });
         res.status(200).json(orders);
     } catch (error) {
         res.status(500).json({ message: error.message });
+    }
+};
+
+export const getOrderReport = async (req, res) => {
+    try {
+        const { from, to } = req.query;
+        let dateQuery = {};
+
+        if (from || to) {
+            dateQuery.createdAt = {};
+            if (from) dateQuery.createdAt.$gte = new Date(from);
+            if (to) {
+                const toDate = new Date(to);
+                toDate.setHours(23, 59, 59, 999);
+                dateQuery.createdAt.$lte = toDate;
+            }
+        }
+
+        const orders = await Order.find(dateQuery);
+
+        const summary = {
+            totalOrders: orders.length,
+            totalRevenue: orders.filter(o => o.paymentStatus === 'paid').reduce((sum, o) => sum + o.total, 0),
+            statusCounts: {
+                pending: orders.filter(o => o.status === 'pending').length,
+                preparing: orders.filter(o => o.status === 'preparing').length,
+                delivered: orders.filter(o => o.status === 'delivered').length,
+                cancelled: orders.filter(o => o.status === 'cancelled').length
+            },
+            popularItems: {}
+        };
+
+        // Calculate popular items
+        orders.forEach(order => {
+            order.items.forEach(item => {
+                if (!summary.popularItems[item.name]) {
+                    summary.popularItems[item.name] = 0;
+                }
+                summary.popularItems[item.name] += item.quantity;
+            });
+        });
+
+        res.status(200).json({
+            success: true,
+            summary,
+            orders // Send full orders for CSV export if needed
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Failed to generate report',
+            error: error.message
+        });
     }
 };
 
