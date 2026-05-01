@@ -5,7 +5,7 @@ import { protect, admin } from '../middleware/auth.js';
 import { getUsers, getUserById, createUser, updateUser, deleteUser } from '../controllers/adminController.js';
 
 // Room management
-import { getRooms, getRoomById, updateRoom, deleteRoom, updateRoomStatusByNumber } from '../controllers/roomController.js';
+import { getRooms, createRoom, getRoomById, updateRoom, deleteRoom, updateRoomStatusByNumber } from '../controllers/roomController.js';
 
 // Booking management
 import {
@@ -56,6 +56,7 @@ router.delete('/users/:id', deleteUser);
 
 //Rooms
 router.get('/rooms', getRooms);
+router.post('/rooms', createRoom); // Added this line
 router.get('/rooms/:id', getRoomById);
 router.put('/rooms/:id', updateRoom);
 router.put('/rooms/number/:roomNumber/status', updateRoomStatusByNumber);
