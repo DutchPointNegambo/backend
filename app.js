@@ -11,6 +11,7 @@ import packageRoutes from './routes/packageRoutes.js';
 import bookingRoutes from './routes/bookingRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import eventBookingRoutes from './routes/eventBookingRoutes.js';
+import aiRoutes from './routes/aiRoutes.js';
 import connectDB from './config/database.js';
 
 dotenv.config();
@@ -50,6 +51,7 @@ app.use('/api/packages', packageRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/event-bookings', eventBookingRoutes);
+app.use('/api/ai', aiRoutes);
 
 app.get('/api/health', (req, res) => {
     res.json({ message: 'API is running' });

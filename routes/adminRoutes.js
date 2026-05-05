@@ -5,7 +5,7 @@ import { protect, admin } from '../middleware/auth.js';
 import { getUsers, getUserById, createUser, updateUser, deleteUser } from '../controllers/adminController.js';
 
 // Room management
-import { getRooms, getRoomById, updateRoom, deleteRoom, updateRoomStatusByNumber } from '../controllers/roomController.js';
+import { getRooms, createRoom, getRoomById, updateRoom, deleteRoom, updateRoomStatusByNumber } from '../controllers/roomController.js';
 
 // Booking management
 import {
@@ -17,7 +17,7 @@ import {
 } from '../controllers/bookingController.js';
 
 // Staff management
-import { getEmployees as getStaff, createEmployee as createStaff, updateEmployee as updateStaff, deleteEmployee as deleteStaff } from '../controllers/employeeController.js';
+import { getStaff, getStaffById, createStaff, updateStaff, deleteStaff } from '../controllers/staffController.js';
 
 // Reports
 import { getReportSummary, getMonthlyRevenue as getMonthlyReport, getBookingReport } from '../controllers/reportController.js';
@@ -56,6 +56,7 @@ router.delete('/users/:id', deleteUser);
 
 //Rooms
 router.get('/rooms', getRooms);
+router.post('/rooms', createRoom); // Added this line
 router.get('/rooms/:id', getRoomById);
 router.put('/rooms/:id', updateRoom);
 router.put('/rooms/number/:roomNumber/status', updateRoomStatusByNumber);
@@ -68,6 +69,7 @@ router.put('/bookings/:id/status', updateBookingStatus);
 
 //Staff
 router.get('/staff', getStaff);
+router.get('/staff/:id', getStaffById);
 router.post('/staff', createStaff);
 router.put('/staff/:id', updateStaff);
 router.delete('/staff/:id', deleteStaff);
