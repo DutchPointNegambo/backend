@@ -3,6 +3,17 @@ import Room from '../models/Room.js';
 import User from '../models/User.js';
 import crypto from 'crypto';
 import { createNotification } from './notificationController.js';
+import sendEmail from '../utils/sendEmail.js';
+
+// --- Helpers ---
+const detectCardBrand = (num) => {
+    const n = num.replace(/\s/g, '');
+    if (/^4/.test(n)) return 'Visa';
+    if (/^5[1-5]/.test(n) || /^2[2-7]/.test(n)) return 'Mastercard';
+    if (/^3[47]/.test(n)) return 'Amex';
+    if (/^6(?:011|5)/.test(n)) return 'Discover';
+    return 'Unknown';
+};
 
 export const createBooking = async (req, res) => {
     try {
@@ -13,7 +24,7 @@ export const createBooking = async (req, res) => {
             checkOut,
             guests,
             guestInfo,
-            paymentMethod
+            cardDetails
         } = req.body;
 
         // 1. Validate room exists
@@ -43,6 +54,45 @@ export const createBooking = async (req, res) => {
             return res.status(400).json({ message: 'Room is already booked for these dates' });
         }
 
+        // --- Card Validation ---
+        if (!cardDetails || !cardDetails.number || !cardDetails.expiry || !cardDetails.cvv || !cardDetails.name) {
+            return res.status(400).json({ message: 'All card details are required.' });
+        }
+
+        const cardNum = cardDetails.number.replace(/\s/g, '');
+        if (!/^\d{13,19}$/.test(cardNum)) {
+            return res.status(400).json({ message: 'Invalid card number.' });
+        }
+
+        // Luhn check
+        let sum = 0, alt = false;
+        for (let i = cardNum.length - 1; i >= 0; i--) {
+            let n = parseInt(cardNum[i], 10);
+            if (alt) { n *= 2; if (n > 9) n -= 9; }
+            sum += n;
+            alt = !alt;
+        }
+        if (sum % 10 !== 0) {
+            return res.status(400).json({ message: 'Card number failed validation.' });
+        }
+
+        // Expiry check MM/YY
+        const expiryMatch = cardDetails.expiry.match(/^(0[1-9]|1[0-2])\/(\d{2})$/);
+        if (!expiryMatch) {
+            return res.status(400).json({ message: 'Card expiry must be MM/YY format.' });
+        }
+        const expMonth = parseInt(expiryMatch[1], 10);
+        const expYear = 2000 + parseInt(expiryMatch[2], 10);
+        const now = new Date();
+        if (expYear < now.getFullYear() || (expYear === now.getFullYear() && expMonth < (now.getMonth() + 1))) {
+            return res.status(400).json({ message: 'Card has expired.' });
+        }
+
+        // CVV
+        if (!/^\d{3,4}$/.test(cardDetails.cvv)) {
+            return res.status(400).json({ message: 'CVV must be 3 or 4 digits.' });
+        }
+
         // 4. Calculate nights and total
         const isDayUse = room.package === 'day-use';
         const diffTime = Math.abs(endDate - startDate);
@@ -56,7 +106,7 @@ export const createBooking = async (req, res) => {
         
         const booking = await Booking.create({
             bookingId,
-            user: userId || null, // Allow guest checkout if no userId
+            user: userId || null,
             guestInfo,
             room: roomId,
             checkIn: startDate,
@@ -65,8 +115,16 @@ export const createBooking = async (req, res) => {
             nights,
             subtotal,
             total,
-            status: 'pending', // Default to pending
-            paymentMethod: paymentMethod || 'onsite'
+            status: 'confirmed',
+            paymentMethod: 'card',
+            paidAmount: total,
+            paymentStatus: 'fully_paid',
+            paymentDetails: {
+                cardLast4: cardNum.slice(-4),
+                cardBrand: detectCardBrand(cardNum),
+                transactionId: `TXN${Date.now()}`,
+            },
+            paymentDate: new Date()
         });
 
         // 5. Create notification for admin
@@ -82,6 +140,56 @@ export const createBooking = async (req, res) => {
         });
 
         res.status(201).json(booking);
+
+        // 6. Send Confirmation Email
+        try {
+            const emailHtml = `
+                <div style="font-family: 'Inter', sans-serif; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">
+                    <div style="background: linear-gradient(135deg, #0f172a, #334155); padding: 40px 20px; text-align: center; color: #ffffff;">
+                        <h1 style="margin: 0; font-size: 28px; letter-spacing: -0.025em;">Booking Confirmed!</h1>
+                        <p style="margin: 10px 0 0; opacity: 0.8; font-size: 16px;">Reference: ${bookingId}</p>
+                    </div>
+                    <div style="padding: 32px 24px;">
+                        <p style="font-size: 16px; line-height: 1.6; margin-bottom: 24px;">Hi ${guestInfo.firstName}, thank you for choosing Dutch Point Resort. Your room booking has been successfully received and confirmed.</p>
+                        
+                        <div style="background-color: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                            <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">Stay Summary</h3>
+                            <table style="width: 100%; font-size: 14px; border-collapse: collapse;">
+                                <tr><td style="padding: 6px 0; color: #64748b;">Room</td><td style="padding: 6px 0; font-weight: 600; text-align: right;">${room.roomNumber} (${room.type})</td></tr>
+                                <tr><td style="padding: 6px 0; color: #64748b;">Check-In</td><td style="padding: 6px 0; font-weight: 600; text-align: right;">${startDate.toLocaleDateString()}</td></tr>
+                                <tr><td style="padding: 6px 0; color: #64748b;">Check-Out</td><td style="padding: 6px 0; font-weight: 600; text-align: right;">${endDate.toLocaleDateString()}</td></tr>
+                                <tr><td style="padding: 6px 0; color: #64748b;">Nights</td><td style="padding: 6px 0; font-weight: 600; text-align: right;">${nights}</td></tr>
+                                <tr><td style="padding: 6px 0; color: #64748b;">Guests</td><td style="padding: 6px 0; font-weight: 600; text-align: right;">${guests}</td></tr>
+                            </table>
+                        </div>
+
+                        <div style="border-top: 1px solid #f1f5f9; padding-top: 20px;">
+                            <table style="width: 100%; font-size: 14px;">
+                                <tr><td style="padding: 4px 0;">Total Amount</td><td style="padding: 4px 0; font-weight: 600; text-align: right;">Rs. ${total.toLocaleString()}</td></tr>
+                                <tr><td style="padding: 4px 0; color: #10b981;">Amount Paid</td><td style="padding: 4px 0; font-weight: 700; text-align: right; color: #10b981;">Rs. ${total.toLocaleString()}</td></tr>
+                            </table>
+                        </div>
+
+                        <div style="margin-top: 32px; text-align: center;">
+                            <p style="font-size: 14px; color: #64748b; margin-bottom: 20px;">We look forward to welcoming you!</p>
+                            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/profile" style="display: inline-block; background-color: #0f172a; color: #ffffff; padding: 14px 28px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 14px;">View My Booking</a>
+                        </div>
+                    </div>
+                    <div style="background-color: #f1f5f9; padding: 24px; text-align: center; font-size: 12px; color: #94a3b8;">
+                        <p style="margin: 0;">Dutch Point Resort, Negombo, Sri Lanka</p>
+                        <p style="margin: 4px 0 0;">This is an automated confirmation email.</p>
+                    </div>
+                </div>
+            `;
+
+            await sendEmail({
+                email: guestInfo.email,
+                subject: `Booking Confirmed: Room ${room.roomNumber} - ${bookingId}`,
+                html: emailHtml,
+            });
+        } catch (emailErr) {
+            console.error('Email failed to send:', emailErr);
+        }
     } catch (error) {
         console.error('Create Booking Error:', error);
         res.status(500).json({ message: error.message });
