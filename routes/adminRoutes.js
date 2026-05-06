@@ -37,6 +37,12 @@ import {
 // Contact management
 import { getContacts, updateContactStatus, deleteContact } from '../controllers/contactController.js';
 
+// Event booking management
+import {
+    adminGetEventBookings,
+    adminUpdateEventStatus,
+    adminUpdateEventPayment,
+} from '../controllers/eventBookingController.js';
 
 const router = express.Router();
 
@@ -98,6 +104,11 @@ router.delete('/packages/:id', deletePackage);
 router.get('/contacts', getContacts);
 router.put('/contacts/:id/status', updateContactStatus);
 router.delete('/contacts/:id', deleteContact);
+
+//Event Bookings
+router.get('/events', adminGetEventBookings);
+router.put('/events/:id/status', adminUpdateEventStatus);
+router.put('/events/:id/payment', adminUpdateEventPayment);
 
 
 export default router;
