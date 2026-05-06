@@ -1,12 +1,36 @@
 import Employee from '../models/Employee.js';
 import Attendance from '../models/Attendance.js';
 import User from '../models/User.js';
+import { generateToken } from '../utils/otpToken.js';
 
 // Helper: get start of day
 const startOfDay = (date = new Date()) => {
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
     return d;
+};
+
+// GET /api/staff/my-qr-token — returns a fresh 60-second OTP token for the logged-in employee
+export const getMyQRToken = async (req, res) => {
+    try {
+        const employee = await Employee.findOne({ user: req.user._id });
+        if (!employee) return res.status(404).json({ message: 'Employee profile not found' });
+        if (employee.status !== 'Active') return res.status(403).json({ message: 'Your account is not active' });
+
+        const token = generateToken(employee.employeeId);
+        const expiresInSeconds = 60 - (Math.floor(Date.now() / 1000) % 60);
+
+        res.json({
+            token,
+            employeeId: employee.employeeId,
+            name: employee.name,
+            department: employee.department,
+            jobTitle: employee.jobTitle,
+            expiresInSeconds,
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
 };
 
 // GET /api/staff/me/profile
