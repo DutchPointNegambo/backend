@@ -157,6 +157,9 @@ export const createEventBooking = async (req, res) => {
             addons: addons || [],
         })
 
+        // Populate decoration and foodPackage for the email
+        await booking.populate('decoration foodPackage')
+
         // ── Send Confirmation Email ─────────────────────────────────────
         try {
             const emailHtml = `
@@ -175,6 +178,8 @@ export const createEventBooking = async (req, res) => {
                                 <tr><td style="padding: 6px 0; color: #64748b;">Date</td><td style="padding: 6px 0; font-weight: 600; text-align: right;">${new Date(eventDate).toLocaleDateString()}</td></tr>
                                 <tr><td style="padding: 6px 0; color: #64748b;">Slot</td><td style="padding: 6px 0; font-weight: 600; text-align: right; text-transform: capitalize;">${timeSlot}</td></tr>
                                 <tr><td style="padding: 6px 0; color: #64748b;">Guests</td><td style="padding: 6px 0; font-weight: 600; text-align: right;">${guests}</td></tr>
+                                <tr><td style="padding: 6px 0; color: #64748b;">Decoration</td><td style="padding: 6px 0; font-weight: 600; text-align: right; text-transform: capitalize;">${booking.decoration?.name || 'Standard'}</td></tr>
+                                <tr><td style="padding: 6px 0; color: #64748b;">Food</td><td style="padding: 6px 0; font-weight: 600; text-align: right; text-transform: capitalize;">${booking.foodPackage?.name || 'Standard'}</td></tr>
                             </table>
                         </div>
 
@@ -221,9 +226,14 @@ export const getEventBookings = async (req, res) => {
         if (req.user.role === 'admin') {
             bookings = await EventBooking.find({})
                 .populate('user', 'firstName lastName email')
+                .populate('decoration', 'name')
+                .populate('foodPackage', 'name')
                 .sort({ eventDate: 1 })
         } else {
-            bookings = await EventBooking.find({ user: req.user.id }).sort({ eventDate: 1 })
+            bookings = await EventBooking.find({ user: req.user.id })
+                .populate('decoration', 'name')
+                .populate('foodPackage', 'name')
+                .sort({ eventDate: 1 })
         }
         return res.json(bookings)
     } catch (error) {
@@ -249,6 +259,8 @@ export const adminGetEventBookings = async (req, res) => {
         const [bookings, total] = await Promise.all([
             EventBooking.find(filter)
                 .populate('user', 'firstName lastName email')
+                .populate('decoration', 'name')
+                .populate('foodPackage', 'name')
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limit),
@@ -284,7 +296,10 @@ export const adminUpdateEventStatus = async (req, res) => {
 // ─── User: Get My Event Bookings ──────────────────────────────────────────────
 export const getMyEventBookings = async (req, res) => {
     try {
-        const bookings = await EventBooking.find({ user: req.user._id }).sort({ createdAt: -1 })
+        const bookings = await EventBooking.find({ user: req.user._id })
+            .populate('decoration', 'name')
+            .populate('foodPackage', 'name')
+            .sort({ createdAt: -1 })
         res.json(bookings)
     } catch (error) {
         res.status(500).json({ message: error.message })

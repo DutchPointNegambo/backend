@@ -22,8 +22,8 @@ const eventBookingSchema = new mongoose.Schema(
         eventDate: { type: Date, required: true },
         timeSlot: { type: String, enum: ['day', 'night'], required: true },
         guests: { type: Number, required: true, min: 1 },
-        decoration: { type: String, required: true },
-        foodPackage: { type: String, required: true },
+        decoration: { type: mongoose.Schema.Types.ObjectId, ref: 'EventFeature', required: true },
+        foodPackage: { type: mongoose.Schema.Types.ObjectId, ref: 'EventFeature', required: true },
         addons: [{
             name: { type: String },
             price: { type: Number }
