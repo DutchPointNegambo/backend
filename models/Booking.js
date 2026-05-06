@@ -62,6 +62,21 @@ const bookingSchema = new mongoose.Schema({
   },
   paymentMethod: {
     type: String,
+    default: 'card',
+  },
+  paidAmount: {
+    type: Number,
+    default: 0,
+  },
+  paymentStatus: {
+    type: String,
+    enum: ['pending', 'fully_paid', 'refunded'],
+    default: 'pending',
+  },
+  paymentDetails: {
+    cardLast4: { type: String },
+    cardBrand: { type: String },
+    transactionId: { type: String },
   },
   paymentDate: {
     type: Date,
