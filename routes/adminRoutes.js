@@ -44,6 +44,14 @@ import {
     adminUpdateEventPayment,
 } from '../controllers/eventBookingController.js';
 
+// Event Feature management
+import {
+    adminGetEventFeatures,
+    createEventFeature,
+    updateEventFeature,
+    deleteEventFeature,
+} from '../controllers/eventFeatureController.js';
+
 const router = express.Router();
 
 
@@ -109,6 +117,12 @@ router.delete('/contacts/:id', deleteContact);
 router.get('/events', adminGetEventBookings);
 router.put('/events/:id/status', adminUpdateEventStatus);
 router.put('/events/:id/payment', adminUpdateEventPayment);
+
+//Event Features (Packages)
+router.get('/event-features', adminGetEventFeatures);
+router.post('/event-features', createEventFeature);
+router.put('/event-features/:id', updateEventFeature);
+router.delete('/event-features/:id', deleteEventFeature);
 
 
 export default router;
