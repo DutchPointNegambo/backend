@@ -3,39 +3,33 @@ import crypto from 'crypto';
 // Secret key for HMAC signing — uses env variable or fallback
 const SECRET = process.env.OTP_SECRET || 'dutch-point-hotel-otp-secret-key-2025';
 
-// Time window in seconds (60 seconds)
-const WINDOW_SIZE = 60;
+// Strict expiry in seconds
+const EXPIRY_SECONDS = 90;
 
 /**
- * Get the current time window (Unix timestamp rounded down to nearest WINDOW_SIZE)
+ * Generate HMAC signature for a given employeeId + input
  */
-const getCurrentWindow = () => Math.floor(Date.now() / 1000 / WINDOW_SIZE);
-
-/**
- * Generate HMAC signature for a given employeeId + timeWindow
- */
-const sign = (employeeId, timeWindow) => {
+const sign = (employeeId, input) => {
     return crypto
         .createHmac('sha256', SECRET)
-        .update(`${employeeId}:${timeWindow}`)
+        .update(`${employeeId}:${input}`)
         .digest('hex')
         .slice(0, 8); // Shortened to 8 chars for compact QR
 };
 
 /**
  * Generate a time-based OTP token for an employee
- * Format: "EMP-001:1746556800:a3f9c2d1"
+ * Format: "EMP-001:timestamp:sig"
  */
 export const generateToken = (employeeId) => {
-    const window = getCurrentWindow();
-    const sig = sign(employeeId, window);
-    return `${employeeId}:${window}:${sig}`;
+    const timestamp = Math.floor(Date.now() / 1000);
+    const sig = sign(employeeId, timestamp);
+    return `${employeeId}:${timestamp}:${sig}`;
 };
 
 /**
  * Verify a scanned OTP token
- * Accepts current window AND previous window (±1 grace period = up to 120s leeway)
- * Returns { valid: true, employeeId } or { valid: false, reason }
+ * Enforces strict 90-second expiry from generation timestamp
  */
 export const verifyToken = (token) => {
     if (!token || typeof token !== 'string') {
@@ -44,26 +38,30 @@ export const verifyToken = (token) => {
 
     const parts = token.split(':');
 
-    // New OTP format: "EMP-001:1746556800:a3f9c2d1"
+    // Format: "employeeId:timestamp:sig"
     if (parts.length === 3) {
-        const match = token.match(/^(.+):(\d+):([a-f0-9]+)$/);
-        if (!match) {
+        const employeeId = parts[0];
+        const timestamp = parseInt(parts[1]);
+        const sig = parts[2];
+        
+        if (!employeeId || isNaN(timestamp) || !sig) {
             return { valid: false, reason: 'Token parse error' };
         }
 
-        const employeeId = match[1];
-        const tokenWindow = parseInt(match[2]);
-        const sig = match[3];
-        const currentWindow = getCurrentWindow();
+        const now = Math.floor(Date.now() / 1000);
+        const age = now - timestamp;
 
-        // Accept current and previous window (grace period of up to 2 minutes)
-        const isWindowValid = Math.abs(currentWindow - tokenWindow) <= 1;
-        if (!isWindowValid) {
-            return { valid: false, reason: 'QR code has expired. Please refresh.' };
+        // Strict 90 second expiry check
+        if (age < 0) {
+            return { valid: false, reason: 'Token is from the future? Check server time.' };
+        }
+        
+        if (age > EXPIRY_SECONDS) {
+            return { valid: false, reason: `QR code expired ${age - EXPIRY_SECONDS}s ago. Please refresh.` };
         }
 
-        // Verify HMAC signature against the token's own time window
-        const expectedSig = sign(employeeId, tokenWindow);
+        // Verify HMAC signature against the token's timestamp
+        const expectedSig = sign(employeeId, timestamp);
         if (sig !== expectedSig) {
             return { valid: false, reason: 'Invalid QR signature' };
         }
@@ -71,6 +69,5 @@ export const verifyToken = (token) => {
         return { valid: true, employeeId };
     }
 
-    // Old static format (plain employeeId like "EMP-001") — REJECT
     return { valid: false, reason: 'Static QR codes are no longer accepted. Please use the live QR from your employee dashboard.' };
 };
