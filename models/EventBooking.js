@@ -22,13 +22,47 @@ const eventBookingSchema = new mongoose.Schema(
         eventDate: { type: Date, required: true },
         timeSlot: { type: String, enum: ['day', 'night'], required: true },
         guests: { type: Number, required: true, min: 1 },
-        decoration: { type: String, required: true },
-        foodPackage: { type: String, required: true }, 
+        decoration: { type: mongoose.Schema.Types.ObjectId, ref: 'EventFeature', required: true },
+        foodPackage: { type: mongoose.Schema.Types.ObjectId, ref: 'EventFeature', required: true },
+        addons: [{
+            name: { type: String },
+            price: { type: Number }
+        }],
         totalAmount: { type: Number, required: true },
         status: {
             type: String,
-            enum: ['pending', 'confirmed', 'cancelled'],
-            default: 'confirmed',
+            enum: ['pending', 'confirmed', 'cancelled', 'completed'],
+            default: 'pending',
+        },
+
+        // ─── Payment Fields ─────────────────────────────────────────────
+        paymentType: {
+            type: String,
+            enum: ['deposit', 'full'],
+            required: true,
+            default: 'full',
+        },
+        paidAmount: {
+            type: Number,
+            default: 0,
+        },
+        paymentStatus: {
+            type: String,
+            enum: ['pending', 'deposit_paid', 'fully_paid', 'refunded'],
+            default: 'pending',
+        },
+        paymentMethod: {
+            type: String,
+            default: 'card',
+        },
+        paymentDetails: {
+            cardLast4: { type: String },
+            cardBrand: { type: String },
+            transactionId: { type: String },
+        },
+        specialRequests: {
+            type: String,
+            default: '',
         },
     },
     { timestamps: true }
