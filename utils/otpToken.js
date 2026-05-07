@@ -3,8 +3,8 @@ import crypto from 'crypto';
 // Secret key for HMAC signing — uses env variable or fallback
 const SECRET = process.env.OTP_SECRET || 'dutch-point-hotel-otp-secret-key-2025';
 
-// Time window in seconds (60 seconds)
-const WINDOW_SIZE = 60;
+// Time window in seconds (90 seconds / 1.5 minutes)
+const WINDOW_SIZE = 90;
 
 /**
  * Get the current time window (Unix timestamp rounded down to nearest WINDOW_SIZE)
