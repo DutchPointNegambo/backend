@@ -1,5 +1,6 @@
 import Attendance from '../models/Attendance.js';
 import Employee from '../models/Employee.js';
+import { verifyToken } from '../utils/otpToken.js';
 
 const LATE_THRESHOLD_HOUR = 9; // 9:00 AM
 
@@ -10,14 +11,22 @@ const startOfDay = (date = new Date()) => {
     return d;
 };
 
-// POST /api/admin/attendance/scan — QR scan check-in/check-out
+// POST /api/admin/attendance/scan — QR scan check-in/check-out (OTP verified)
 export const scanAttendance = async (req, res) => {
     try {
-        const { employeeId } = req.body;
+        const { token } = req.body;
 
-        if (!employeeId) {
-            return res.status(400).json({ message: 'Employee ID is required' });
+        if (!token) {
+            return res.status(400).json({ message: 'QR token is required' });
         }
+
+        // Verify the time-based OTP token
+        const verification = verifyToken(token);
+        if (!verification.valid) {
+            return res.status(401).json({ message: verification.reason });
+        }
+
+        const { employeeId } = verification;
 
         // Find the employee
         const employee = await Employee.findOne({ employeeId });
@@ -82,6 +91,7 @@ export const scanAttendance = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
 
 // GET /api/admin/attendance — List attendance records
 export const getAttendance = async (req, res) => {

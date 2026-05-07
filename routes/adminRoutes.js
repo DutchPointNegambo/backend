@@ -37,6 +37,20 @@ import {
 // Contact management
 import { getContacts, updateContactStatus, deleteContact } from '../controllers/contactController.js';
 
+// Event booking management
+import {
+    adminGetEventBookings,
+    adminUpdateEventStatus,
+    adminUpdateEventPayment,
+} from '../controllers/eventBookingController.js';
+
+// Event Feature management
+import {
+    adminGetEventFeatures,
+    createEventFeature,
+    updateEventFeature,
+    deleteEventFeature,
+} from '../controllers/eventFeatureController.js';
 
 const router = express.Router();
 
@@ -98,6 +112,17 @@ router.delete('/packages/:id', deletePackage);
 router.get('/contacts', getContacts);
 router.put('/contacts/:id/status', updateContactStatus);
 router.delete('/contacts/:id', deleteContact);
+
+//Event Bookings
+router.get('/events', adminGetEventBookings);
+router.put('/events/:id/status', adminUpdateEventStatus);
+router.put('/events/:id/payment', adminUpdateEventPayment);
+
+//Event Features (Packages)
+router.get('/event-features', adminGetEventFeatures);
+router.post('/event-features', createEventFeature);
+router.put('/event-features/:id', updateEventFeature);
+router.delete('/event-features/:id', deleteEventFeature);
 
 
 export default router;

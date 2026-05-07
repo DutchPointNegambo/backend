@@ -4,7 +4,8 @@ import {
     getMyProfile, 
     updateMyProfile, 
     getMyAttendance, 
-    getMyLastPayroll 
+    getMyLastPayroll,
+    getMyQRToken,
 } from '../controllers/staffSelfController.js';
 
 const router = express.Router();
@@ -24,5 +25,6 @@ router.get('/profile', getMyProfile);
 router.put('/profile', updateMyProfile);
 router.get('/attendance', getMyAttendance);
 router.get('/payroll/last', getMyLastPayroll);
+router.get('/my-qr-token', getMyQRToken);
 
 export default router;
