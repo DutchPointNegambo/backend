@@ -26,7 +26,7 @@ export const getMyQRToken = async (req, res) => {
             name: employee.name,
             department: employee.department,
             jobTitle: employee.jobTitle,
-            expiresInSeconds,
+            expiresInSeconds: 90,
         });
     } catch (error) {
         res.status(500).json({ message: error.message });
