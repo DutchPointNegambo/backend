@@ -27,7 +27,11 @@ const orderSchema = new mongoose.Schema({
         enum: ['pending', 'paid', 'failed'], 
         default: 'pending' 
     },
-    stripeSessionId: { type: String },
+    paymentDetails: {
+        cardLast4: { type: String },
+        cardBrand: { type: String },
+        transactionId: { type: String }
+    },
     createdAt: { type: Date, default: Date.now }
 });
 
