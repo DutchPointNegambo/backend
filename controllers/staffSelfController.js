@@ -10,7 +10,7 @@ const startOfDay = (date = new Date()) => {
     return d;
 };
 
-// GET /api/staff/my-qr-token — returns a fresh 60-second OTP token for the logged-in employee
+// GET /api/staff/my-qr-token — returns a fresh 90-second OTP token for the logged-in employee
 export const getMyQRToken = async (req, res) => {
     try {
         const employee = await Employee.findOne({ user: req.user._id });
@@ -18,7 +18,7 @@ export const getMyQRToken = async (req, res) => {
         if (employee.status !== 'Active') return res.status(403).json({ message: 'Your account is not active' });
 
         const token = generateToken(employee.employeeId);
-        const expiresInSeconds = 60 - (Math.floor(Date.now() / 1000) % 60);
+        const expiresInSeconds = 90 - (Math.floor(Date.now() / 1000) % 90);
 
         res.json({
             token,
@@ -26,7 +26,7 @@ export const getMyQRToken = async (req, res) => {
             name: employee.name,
             department: employee.department,
             jobTitle: employee.jobTitle,
-            expiresInSeconds,
+            expiresInSeconds: 90,
         });
     } catch (error) {
         res.status(500).json({ message: error.message });
