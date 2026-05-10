@@ -27,12 +27,15 @@ export const getStaff = async (req, res) => {
                     const nameParts = (s.name || '').split(' ');
                     const isAlreadyHashed = s.password && s.password.startsWith('$2a$');
                     
+                    const isReceptionist = s.jobTitle?.toLowerCase().includes('receptionist') || 
+                                          s.department === 'Front Desk';
+                    
                     user = new User({
                         firstName: nameParts[0] || 'Staff',
                         lastName: nameParts.slice(1).join(' ') || 'Member',
                         email: s.email.toLowerCase(),
                         phone: s.phone,
-                        role: 'staff',
+                        role: isReceptionist ? 'receptionist' : 'staff',
                         status: 'Active'
                     });
 
@@ -46,7 +49,9 @@ export const getStaff = async (req, res) => {
                     }
                     await user.save();
                 } else {
-                    user.role = 'staff';
+                    const isReceptionist = s.jobTitle?.toLowerCase().includes('receptionist') || 
+                                          s.department === 'Front Desk';
+                    user.role = isReceptionist ? 'receptionist' : 'staff';
                     await user.save();
                 }
                 s.user = user._id;
@@ -87,9 +92,14 @@ export const createStaff = async (req, res) => {
         // Find or create User account
         let user = await User.findOne({ email });
         
+        // Determine role based on job title or department
+        const isReceptionist = req.body.jobTitle?.toLowerCase().includes('receptionist') || 
+                              req.body.department === 'Front Desk';
+        const assignedRole = isReceptionist ? 'receptionist' : 'staff';
+
         if (user) {
             // If user exists, update role and info
-            user.role = 'staff';
+            user.role = assignedRole;
             if (req.body.password && req.body.password.trim() !== '') {
                 user.password = req.body.password;
             }
@@ -104,7 +114,7 @@ export const createStaff = async (req, res) => {
                 email,
                 password: req.body.password,
                 phone: req.body.phone,
-                role: 'staff',
+                role: assignedRole,
                 status: 'Active'
             });
         }
@@ -128,7 +138,10 @@ export const updateStaff = async (req, res) => {
         if (!staff) return res.status(404).json({ message: 'Staff member not found' });
 
         // Update fields
-        const fields = ['name', 'email', 'phone', 'jobTitle', 'department', 'status', 'salary', 'hireDate', 'annualLeaveBalance'];
+        const fields = [
+            'name', 'email', 'phone', 'jobTitle', 'department', 'status', 'salary', 
+            'hireDate', 'annualLeaveBalance', 'nic', 'address', 'dateOfBirth', 'emergencyContact', 'gender'
+        ];
         fields.forEach(field => {
             if (req.body[field] !== undefined) {
                 staff[field] = req.body[field];
@@ -152,6 +165,16 @@ export const updateStaff = async (req, res) => {
                 if (req.body.status) {
                     user.status = req.body.status === 'Terminated' ? 'Inactive' : 'Active';
                 }
+                
+                // Update role if job title or department changed
+                if (req.body.jobTitle || req.body.department) {
+                    const jobTitle = req.body.jobTitle || staff.jobTitle;
+                    const department = req.body.department || staff.department;
+                    const isReceptionist = jobTitle.toLowerCase().includes('receptionist') || 
+                                          department === 'Front Desk';
+                    user.role = isReceptionist ? 'receptionist' : 'staff';
+                }
+
                 await user.save();
             }
         }

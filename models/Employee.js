@@ -55,6 +55,24 @@ const employeeSchema = new mongoose.Schema({
         type: Number,
         default: 14,
     },
+    nic: {
+        type: String,
+        unique: true,
+        sparse: true,
+    },
+    address: {
+        type: String,
+    },
+    dateOfBirth: {
+        type: Date,
+    },
+    emergencyContact: {
+        type: String,
+    },
+    gender: {
+        type: String,
+        enum: ['Male', 'Female', 'Other'],
+    },
 }, {
     timestamps: true,
 });
