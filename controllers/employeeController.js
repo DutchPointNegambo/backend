@@ -26,17 +26,21 @@ export const getEmployees = async (req, res) => {
                 let user = await User.findOne({ email: emp.email.toLowerCase() });
                 if (!user) {
                     const nameParts = (emp.name || '').trim().split(/\s+/);
+                    const isReceptionist = (emp.jobTitle || '').toLowerCase().includes('receptionist') || 
+                                          emp.department === 'Front Desk';
                     user = await User.create({
                         firstName: nameParts[0] || 'Staff',
                         lastName: nameParts.slice(1).join(' ') || 'Member',
                         email: emp.email.toLowerCase(),
                         password: emp.password || 'Temporary123!',
                         phone: emp.phone,
-                        role: 'staff',
+                        role: isReceptionist ? 'receptionist' : 'staff',
                         status: 'Active'
                     });
                 } else {
-                    user.role = 'staff';
+                    const isReceptionist = (emp.jobTitle || '').toLowerCase().includes('receptionist') || 
+                                          emp.department === 'Front Desk';
+                    user.role = isReceptionist ? 'receptionist' : 'staff';
                     await user.save();
                 }
                 emp.user = user._id;
@@ -53,7 +57,10 @@ export const getEmployees = async (req, res) => {
 // POST /api/admin/staff — Create employee
 export const createEmployee = async (req, res) => {
     try {
-        const { name, email, phone, jobTitle, department, status, salary, hireDate, password } = req.body;
+        const { 
+            name, email, phone, jobTitle, department, status, salary, hireDate, password,
+            nic, address, dateOfBirth, emergencyContact, gender
+        } = req.body;
 
         const exists = await Employee.findOne({ email: email.toLowerCase() });
         if (exists) {
@@ -64,20 +71,27 @@ export const createEmployee = async (req, res) => {
         const firstName = nameParts[0] || 'Staff';
         const lastName = nameParts.slice(1).join(' ') || 'Member';
 
+        // Determine role
+        const isReceptionist = jobTitle?.toLowerCase().includes('receptionist') || 
+                              department === 'Front Desk';
+        const assignedRole = isReceptionist ? 'receptionist' : 'staff';
+
         // Find or create User
         let user = await User.findOne({ email: email.toLowerCase() });
         if (user) {
-            user.role = 'staff';
+            user.role = assignedRole;
             if (password) user.password = password;
             await user.save();
         } else {
             user = await User.create({
-                firstName, lastName, email: email.toLowerCase(), password, phone, role: 'staff'
+                firstName, lastName, email: email.toLowerCase(), password, phone, role: assignedRole
             });
         }
 
         const employee = await Employee.create({
-            name, email: email.toLowerCase(), phone, jobTitle, department, status, salary, hireDate, password, user: user._id
+            name, email: email.toLowerCase(), phone, jobTitle, department, status, salary, hireDate, password, 
+            user: user._id,
+            nic, address, dateOfBirth, emergencyContact, gender
         });
 
         res.status(201).json(employee);
@@ -93,8 +107,14 @@ export const updateEmployee = async (req, res) => {
         if (!employee) return res.status(404).json({ message: 'Employee not found' });
 
         // Update fields
-        Object.keys(req.body).forEach(key => {
-            employee[key] = req.body[key];
+        const fields = [
+            'name', 'email', 'phone', 'jobTitle', 'department', 'status', 'salary', 'hireDate', 
+            'password', 'nic', 'address', 'dateOfBirth', 'emergencyContact', 'gender'
+        ];
+        fields.forEach(key => {
+            if (req.body[key] !== undefined) {
+                employee[key] = req.body[key];
+            }
         });
 
         // Sync with User
@@ -109,6 +129,15 @@ export const updateEmployee = async (req, res) => {
                 if (req.body.email) user.email = req.body.email.toLowerCase();
                 if (req.body.password) user.password = req.body.password;
                 if (req.body.status) user.status = req.body.status === 'Terminated' ? 'Inactive' : 'Active';
+
+                // Sync role if jobTitle or department changed
+                if (req.body.jobTitle || req.body.department) {
+                    const jt = req.body.jobTitle || employee.jobTitle;
+                    const dept = req.body.department || employee.department;
+                    const isRec = jt.toLowerCase().includes('receptionist') || dept === 'Front Desk';
+                    user.role = isRec ? 'receptionist' : 'staff';
+                }
+
                 await user.save();
             }
         }
