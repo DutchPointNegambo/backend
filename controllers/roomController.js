@@ -18,16 +18,16 @@ export const getRoomsByCategory = async (req, res) => {
 
     const start = checkIn ? new Date(checkIn) : new Date();
     const end = checkOut ? new Date(checkOut) : new Date();
-    
 
+    //set default today
     if (!checkIn) {
-      start.setHours(0,0,0,0);
-      end.setHours(23,59,59,999);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
     }
 
 
     const roomIds = rooms.map(r => r._id);
-    
+
 
     const roomNumbers = rooms.map(r => r.roomNumber);
     const allRelatedRooms = await Room.find({ roomNumber: { $in: roomNumbers } });
@@ -42,12 +42,12 @@ export const getRoomsByCategory = async (req, res) => {
     });
 
     const roomsWithAvailability = rooms.map(room => {
-      
+
       const relatedIds = allRelatedRooms
         .filter(r => r.roomNumber === room.roomNumber)
         .map(r => r._id.toString());
-        
-      const isOccupied = bookings.some(b => 
+
+      const isOccupied = bookings.some(b =>
         relatedIds.includes(b.room.toString())
       );
 
@@ -81,7 +81,7 @@ export const checkRoomAvailability = async (req, res) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    
+
     const relatedRooms = await Room.find({ roomNumber: room.roomNumber });
     const relatedIds = relatedRooms.map(r => r._id);
 
@@ -100,7 +100,7 @@ export const checkRoomAvailability = async (req, res) => {
   }
 };
 
-// GET all 
+// admin - get all rooms 
 export const getRooms = async (req, res) => {
   try {
     const { page = 1, limit = 20, search, type } = req.query;
@@ -121,23 +121,21 @@ export const getRooms = async (req, res) => {
       .skip((page - 1) * parseInt(limit))
       .limit(parseInt(limit));
 
-    // DYNAMIC STATUS SYNC
-    // Check bookings to determine if room should be marked 'occupied'
+
     const now = new Date();
     const roomsWithStatus = await Promise.all(rooms.map(async (room) => {
       const roomObj = room.toObject();
-      roomObj.dbStatus = room.status; // Keep track of the actual DB status
-      
-      // DYNAMIC STATUS SYNC
-      // Mark as occupied if there's an active booking today
+      roomObj.dbStatus = room.status;
+
+
       if (roomObj.status !== 'maintenance') {
         const relatedRooms = await Room.find({ roomNumber: room.roomNumber });
         const relatedIds = relatedRooms.map(r => r._id);
 
         const startOfToday = new Date();
-        startOfToday.setHours(0,0,0,0);
+        startOfToday.setHours(0, 0, 0, 0);
         const endOfToday = new Date();
-        endOfToday.setHours(23,59,59,999);
+        endOfToday.setHours(23, 59, 59, 999);
 
         // Find any active booking or one that starts today
         const activeBooking = await Booking.findOne({
@@ -211,7 +209,7 @@ export const updateRoomStatusByNumber = async (req, res) => {
   try {
     const { roomNumber } = req.params;
     const { status } = req.body;
-    
+
     if (!['available', 'occupied', 'maintenance'].includes(status)) {
       return res.status(400).json({ message: 'Invalid status' });
     }
@@ -249,7 +247,7 @@ export const getAllRoomsPublic = async (req, res) => {
     const rooms = await Room.find({}, 'name images type');
     res.json(rooms);
   } catch (error) {
-    
+
     res.status(500).json({ message: 'Server error while fetching gallery rooms' });
   }
 };
