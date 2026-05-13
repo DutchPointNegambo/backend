@@ -22,6 +22,11 @@ const staffSchema = new mongoose.Schema(
         salary: { type: Number, default: 0, min: 0 },
         hireDate: { type: Date, default: Date.now },
         annualLeaveBalance: { type: Number, default: 14 }, // Default annual leaves
+        nic: { type: String, unique: true, sparse: true },
+        address: { type: String },
+        dateOfBirth: { type: Date },
+        emergencyContact: { type: String },
+        gender: { type: String, enum: ['Male', 'Female', 'Other'] },
     },
     { timestamps: true }
 );
