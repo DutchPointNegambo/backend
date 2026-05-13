@@ -259,8 +259,8 @@ export const adminGetEventBookings = async (req, res) => {
         const [bookings, total] = await Promise.all([
             EventBooking.find(filter)
                 .populate('user', 'firstName lastName email')
-                .populate('decoration', 'name')
-                .populate('foodPackage', 'name')
+                .populate('decoration')
+                .populate('foodPackage')
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limit),
@@ -297,8 +297,8 @@ export const adminUpdateEventStatus = async (req, res) => {
 export const getMyEventBookings = async (req, res) => {
     try {
         const bookings = await EventBooking.find({ user: req.user._id })
-            .populate('decoration', 'name')
-            .populate('foodPackage', 'name')
+            .populate('decoration')
+            .populate('foodPackage')
             .sort({ createdAt: -1 })
         res.json(bookings)
     } catch (error) {
