@@ -19,7 +19,8 @@ export const createFood = async (req, res) => {
     try {
         const { name, description, category, price, status, image, rating, prepTime, productionPrice, discount, sellingPrice } = req.body;
 
-        const calculatedSellingPrice = price ? (price - (price * ((discount || 0) / 100))) : sellingPrice;
+        const itemDiscount = parseFloat(discount) || 0;
+        const calculatedSellingPrice = price ? (price - (price * (itemDiscount / 100))) : sellingPrice;
 
         const food = new Food({
             name,
