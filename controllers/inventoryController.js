@@ -14,11 +14,11 @@ export const getInventory = async (req, res) => {
 
 export const createInventoryItem = async (req, res) => {
   try {
-    const { name, sku, category, quantity, unit, reorderLevel, supplier, price, expiryDate, warrantyInfo } = req.body;
+    const { name, sku, category, quantity, unit, reorderLevel, supplier, price, expiryDate, warrantyInfo, imageUrl } = req.body;
 
-    const itemExists = await Inventory.findOne({ sku });
+    const itemExists = await Inventory.findOne({ sku: sku.trim() });
     if (itemExists) {
-      return res.status(400).json({ message: 'Item with this SKU already exists' });
+      return res.status(400).json({ message: `SKU "${sku}" is already registered in the system` });
     }
 
     const item = await Inventory.create({
@@ -31,7 +31,8 @@ export const createInventoryItem = async (req, res) => {
       supplier,
       price,
       expiryDate,
-      warrantyInfo
+      warrantyInfo,
+      imageUrl
     });
 
     // Create an initial stock log if quantity > 0
@@ -63,7 +64,13 @@ export const updateInventoryItem = async (req, res) => {
 
     if (item) {
       item.name = req.body.name || item.name;
-      item.sku = req.body.sku || item.sku;
+      if (req.body.sku && req.body.sku !== item.sku) {
+        const skuExists = await Inventory.findOne({ sku: req.body.sku.trim() });
+        if (skuExists) {
+          return res.status(400).json({ message: 'This SKU is already assigned to another asset' });
+        }
+        item.sku = req.body.sku.trim();
+      }
       item.category = req.body.category || item.category;
       item.unit = req.body.unit || item.unit;
       item.reorderLevel = req.body.reorderLevel !== undefined ? req.body.reorderLevel : item.reorderLevel;
@@ -71,6 +78,7 @@ export const updateInventoryItem = async (req, res) => {
       item.price = req.body.price !== undefined ? req.body.price : item.price;
       item.expiryDate = req.body.expiryDate !== undefined ? req.body.expiryDate : item.expiryDate;
       item.warrantyInfo = req.body.warrantyInfo !== undefined ? req.body.warrantyInfo : item.warrantyInfo;
+      item.imageUrl = req.body.imageUrl !== undefined ? req.body.imageUrl : item.imageUrl;
 
       const updatedItem = await item.save();
       res.json(updatedItem);
@@ -78,6 +86,9 @@ export const updateInventoryItem = async (req, res) => {
       res.status(404).json({ message: 'Item not found' });
     }
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ message: 'Duplicate asset detected: This SKU already exists in the registry.' });
+    }
     res.status(400).json({ message: error.message });
   }
 };

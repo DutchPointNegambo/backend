@@ -51,6 +51,9 @@ const inventorySchema = new mongoose.Schema({
     type: String,
     enum: ['in-stock', 'low-stock', 'out-of-stock'],
     default: 'in-stock',
+  },
+  imageUrl: {
+    type: String,
   }
 }, {
   timestamps: true,
