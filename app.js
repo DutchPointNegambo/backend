@@ -15,12 +15,10 @@ import eventFeatureRoutes from './routes/eventFeatureRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import foodRoutes from './routes/foodRoutes.js';
 import inventoryRoutes from './routes/inventoryRoutes.js';
+import { uploadImage, uploadMiddleware } from './controllers/uploadController.js';
 import connectDB from './config/database.js';
 
 dotenv.config();
-
-// Connect to Database
-// connectDB(); // Moved to server.js
 
 const app = express();
 
@@ -58,6 +56,9 @@ app.use('/api/event-features', eventFeatureRoutes);
 app.use('/api/foods', foodRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/inventory', inventoryRoutes);
+
+// Shared Upload Route (Kept outside /api/admin to avoid global middleware conflict)
+app.post('/api/upload/image', uploadMiddleware, uploadImage);
 
 app.get('/api/health', (req, res) => {
     res.json({ message: 'API is running' });
