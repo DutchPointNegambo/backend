@@ -119,9 +119,31 @@ export const createBooking = async (req, res) => {
         const isDayUse = room.package === 'day-use';
         const diffTime = Math.abs(endDate - startDate);
         const nights = isDayUse ? 0 : Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        // Day-use packages are charged a flat per-booking rate; full-board uses nights × price
-        const subtotal = isDayUse ? room.price : room.price * nights;
-        const total = subtotal; // For now no discounts
+        
+        // Base calculation
+        let unitPrice = room.price;
+        const subtotal = isDayUse ? unitPrice : unitPrice * nights;
+        
+        // Offer logic (August Deluxe Special)
+        let discount = 0;
+        const isAugust = startDate.getMonth() === 7; 
+        const isDeluxe = room.type === 'deluxe';
+
+        if (isAugust && isDeluxe) {
+            const baseOfferPrice = 15000;
+            const discountAmountPerUnit = baseOfferPrice * 0.25; 
+            const finalUnitPrice = baseOfferPrice - discountAmountPerUnit;
+
+            const offerSubtotal = baseOfferPrice * (isDayUse ? 1 : nights);
+            const offerTotal = finalUnitPrice * (isDayUse ? 1 : nights);
+            
+            
+            const currentSubtotal = offerSubtotal;
+            discount = offerSubtotal - offerTotal;
+            
+        }
+
+        const total = subtotal - discount; 
 
         // 4. Create booking
         const bookingId = `BK-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
@@ -135,11 +157,12 @@ export const createBooking = async (req, res) => {
             checkOut: endDate,
             guests,
             nights,
-            subtotal,
-            total,
+            subtotal: (isAugust && isDeluxe) ? (15000 * (isDayUse ? 1 : nights)) : subtotal,
+            discount,
+            total: (isAugust && isDeluxe) ? (15000 * 0.75 * (isDayUse ? 1 : nights)) : total,
             status: 'confirmed',
             paymentMethod,
-            paidAmount: paymentMethod === 'card' ? total : 0,
+            paidAmount: paymentMethod === 'card' ? ((isAugust && isDeluxe) ? (15000 * 0.75 * (isDayUse ? 1 : nights)) : total) : 0,
             paymentStatus: paymentMethod === 'card' ? 'fully_paid' : 'pending',
             paymentDetails,
             paymentDate: paymentMethod === 'card' ? new Date() : null
