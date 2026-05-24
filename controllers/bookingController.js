@@ -24,7 +24,8 @@ export const createBooking = async (req, res) => {
             checkOut,
             guests,
             guestInfo,
-            cardDetails
+            cardDetails,
+            paymentMethod = 'card'
         } = req.body;
 
         // 1. Validate room exists
@@ -54,43 +55,64 @@ export const createBooking = async (req, res) => {
             return res.status(400).json({ message: 'Room is already booked for these dates' });
         }
 
-        // --- Card Validation ---
-        if (!cardDetails || !cardDetails.number || !cardDetails.expiry || !cardDetails.cvv || !cardDetails.name) {
-            return res.status(400).json({ message: 'All card details are required.' });
-        }
+        // --- Card Validation (Only for card payments) ---
+        let paymentDetails = {};
+        let initialPaymentStatus = 'fully_paid';
+        let initialPaidAmount = 0;
 
-        const cardNum = cardDetails.number.replace(/\s/g, '');
-        if (!/^\d{13,19}$/.test(cardNum)) {
-            return res.status(400).json({ message: 'Invalid card number.' });
-        }
+        if (paymentMethod === 'card') {
+            if (!cardDetails || !cardDetails.number || !cardDetails.expiry || !cardDetails.cvv || !cardDetails.name) {
+                return res.status(400).json({ message: 'All card details are required.' });
+            }
 
-        // Luhn check
-        let sum = 0, alt = false;
-        for (let i = cardNum.length - 1; i >= 0; i--) {
-            let n = parseInt(cardNum[i], 10);
-            if (alt) { n *= 2; if (n > 9) n -= 9; }
-            sum += n;
-            alt = !alt;
-        }
-        if (sum % 10 !== 0) {
-            return res.status(400).json({ message: 'Card number failed validation.' });
-        }
+            const cardNum = cardDetails.number.replace(/\s/g, '');
+            if (!/^\d{13,19}$/.test(cardNum)) {
+                return res.status(400).json({ message: 'Invalid card number.' });
+            }
 
-        // Expiry check MM/YY
-        const expiryMatch = cardDetails.expiry.match(/^(0[1-9]|1[0-2])\/(\d{2})$/);
-        if (!expiryMatch) {
-            return res.status(400).json({ message: 'Card expiry must be MM/YY format.' });
-        }
-        const expMonth = parseInt(expiryMatch[1], 10);
-        const expYear = 2000 + parseInt(expiryMatch[2], 10);
-        const now = new Date();
-        if (expYear < now.getFullYear() || (expYear === now.getFullYear() && expMonth < (now.getMonth() + 1))) {
-            return res.status(400).json({ message: 'Card has expired.' });
-        }
+            // Luhn check
+            let sum = 0, alt = false;
+            for (let i = cardNum.length - 1; i >= 0; i--) {
+                let n = parseInt(cardNum[i], 10);
+                if (alt) { n *= 2; if (n > 9) n -= 9; }
+                sum += n;
+                alt = !alt;
+            }
+            if (sum % 10 !== 0) {
+                return res.status(400).json({ message: 'Card number failed validation.' });
+            }
 
-        // CVV
-        if (!/^\d{3,4}$/.test(cardDetails.cvv)) {
-            return res.status(400).json({ message: 'CVV must be 3 or 4 digits.' });
+            // Expiry check MM/YY
+            const expiryMatch = cardDetails.expiry.match(/^(0[1-9]|1[0-2])\/(\d{2})$/);
+            if (!expiryMatch) {
+                return res.status(400).json({ message: 'Card expiry must be MM/YY format.' });
+            }
+            const expMonth = parseInt(expiryMatch[1], 10);
+            const expYear = 2000 + parseInt(expiryMatch[2], 10);
+            const now = new Date();
+            if (expYear < now.getFullYear() || (expYear === now.getFullYear() && expMonth < (now.getMonth() + 1))) {
+                return res.status(400).json({ message: 'Card has expired.' });
+            }
+
+            // CVV
+            if (!/^\d{3,4}$/.test(cardDetails.cvv)) {
+                return res.status(400).json({ message: 'CVV must be 3 or 4 digits.' });
+            }
+
+            paymentDetails = {
+                cardLast4: cardNum.slice(-4),
+                cardBrand: detectCardBrand(cardNum),
+                transactionId: `TXN${Date.now()}`,
+            };
+            initialPaidAmount = 0; // We will calculate total later
+        } else {
+            // For onsite/manual bookings
+            paymentDetails = {
+                transactionId: `MANUAL-${Date.now()}`,
+                note: 'Manual booking by admin'
+            };
+            initialPaymentStatus = 'pending';
+            initialPaidAmount = 0;
         }
 
         // 4. Calculate nights and total
@@ -116,15 +138,11 @@ export const createBooking = async (req, res) => {
             subtotal,
             total,
             status: 'confirmed',
-            paymentMethod: 'card',
-            paidAmount: total,
-            paymentStatus: 'fully_paid',
-            paymentDetails: {
-                cardLast4: cardNum.slice(-4),
-                cardBrand: detectCardBrand(cardNum),
-                transactionId: `TXN${Date.now()}`,
-            },
-            paymentDate: new Date()
+            paymentMethod,
+            paidAmount: paymentMethod === 'card' ? total : 0,
+            paymentStatus: paymentMethod === 'card' ? 'fully_paid' : 'pending',
+            paymentDetails,
+            paymentDate: paymentMethod === 'card' ? new Date() : null
         });
 
         // 5. Create notification for admin

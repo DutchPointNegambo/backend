@@ -31,6 +31,10 @@ const supplierSchema = new mongoose.Schema({
     type: String,
     enum: ['active', 'inactive'],
     default: 'active',
+  },
+  statusReason: {
+    type: String,
+    trim: true,
   }
 }, {
   timestamps: true,

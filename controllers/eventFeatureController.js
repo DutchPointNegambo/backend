@@ -1,6 +1,6 @@
 import EventFeature from '../models/EventFeature.js';
 
-// --- Public: Fetch all features by category ---
+// fetch all
 export const getEventFeatures = async (req, res) => {
     try {
         const { category } = req.query;
@@ -15,10 +15,10 @@ export const getEventFeatures = async (req, res) => {
     }
 };
 
-// --- Admin: Get all features (paginated + filtered) ---
+// Get all features
 export const adminGetEventFeatures = async (req, res) => {
     try {
-        const { category, search, page = 1, limit = 20 } = req.query;
+        const { category, search, page = 1, limit = 6 } = req.query;
         const query = {};
 
         if (category && category !== 'all') query.category = category;
@@ -43,7 +43,7 @@ export const adminGetEventFeatures = async (req, res) => {
     }
 };
 
-// --- Admin: Create new feature ---
+// create
 export const createEventFeature = async (req, res) => {
     try {
         const feature = await EventFeature.create(req.body);
@@ -53,7 +53,7 @@ export const createEventFeature = async (req, res) => {
     }
 };
 
-// --- Admin: Update feature ---
+// update
 export const updateEventFeature = async (req, res) => {
     try {
         const feature = await EventFeature.findByIdAndUpdate(req.params.id, req.body, {
@@ -67,7 +67,7 @@ export const updateEventFeature = async (req, res) => {
     }
 };
 
-// --- Admin: Delete feature ---
+// delete
 export const deleteEventFeature = async (req, res) => {
     try {
         const feature = await EventFeature.findByIdAndDelete(req.params.id);

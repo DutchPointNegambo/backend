@@ -1,9 +1,7 @@
 import Inventory from '../models/Inventory.js';
 import StockLog from '../models/StockLog.js';
 
-// @desc    Get all inventory items
-// @route   GET /api/inventory
-// @access  Private
+
 export const getInventory = async (req, res) => {
   try {
     const inventory = await Inventory.find({}).populate('supplier', 'name');
@@ -13,12 +11,10 @@ export const getInventory = async (req, res) => {
   }
 };
 
-// @desc    Create an inventory item
-// @route   POST /api/inventory
-// @access  Private/Admin
+
 export const createInventoryItem = async (req, res) => {
   try {
-    const { name, sku, category, quantity, unit, reorderLevel, supplier, price } = req.body;
+    const { name, sku, category, quantity, unit, reorderLevel, supplier, price, expiryDate, warrantyInfo } = req.body;
 
     const itemExists = await Inventory.findOne({ sku });
     if (itemExists) {
@@ -33,7 +29,9 @@ export const createInventoryItem = async (req, res) => {
       unit,
       reorderLevel,
       supplier,
-      price
+      price,
+      expiryDate,
+      warrantyInfo
     });
 
     // Create an initial stock log if quantity > 0
@@ -57,9 +55,8 @@ export const createInventoryItem = async (req, res) => {
   }
 };
 
-// @desc    Update an inventory item
-// @route   PUT /api/inventory/:id
-// @access  Private/Admin
+//  Update an inventory item
+
 export const updateInventoryItem = async (req, res) => {
   try {
     const item = await Inventory.findById(req.params.id);
@@ -72,6 +69,8 @@ export const updateInventoryItem = async (req, res) => {
       item.reorderLevel = req.body.reorderLevel !== undefined ? req.body.reorderLevel : item.reorderLevel;
       item.supplier = req.body.supplier || item.supplier;
       item.price = req.body.price !== undefined ? req.body.price : item.price;
+      item.expiryDate = req.body.expiryDate !== undefined ? req.body.expiryDate : item.expiryDate;
+      item.warrantyInfo = req.body.warrantyInfo !== undefined ? req.body.warrantyInfo : item.warrantyInfo;
 
       const updatedItem = await item.save();
       res.json(updatedItem);
@@ -83,9 +82,8 @@ export const updateInventoryItem = async (req, res) => {
   }
 };
 
-// @desc    Adjust stock level (IN/OUT)
-// @route   POST /api/inventory/:id/adjust
-// @access  Private
+// Adjust stock level (IN/OUT)
+
 export const adjustStock = async (req, res) => {
   try {
     const { changeType, quantity, reason, unitCost } = req.body;
@@ -135,9 +133,8 @@ export const adjustStock = async (req, res) => {
   }
 };
 
-// @desc    Delete an inventory item
-// @route   DELETE /api/inventory/:id
-// @access  Private/Admin
+//Delete an inventory item
+
 export const deleteInventoryItem = async (req, res) => {
   try {
     const item = await Inventory.findById(req.params.id);
@@ -153,9 +150,7 @@ export const deleteInventoryItem = async (req, res) => {
   }
 };
 
-// @desc    Get stock logs for an item
-// @route   GET /api/inventory/:id/logs
-// @access  Private
+// Get stock logs for an item
 export const getStockLogs = async (req, res) => {
   try {
     const logs = await StockLog.find({ item: req.params.id })
@@ -167,9 +162,8 @@ export const getStockLogs = async (req, res) => {
   }
 };
 
-// @desc    Get all stock logs (for global history/financials)
-// @route   GET /api/inventory/logs/all
-// @access  Private/Admin
+//Get all stock logs (for global history/financials)
+
 export const getAllStockLogs = async (req, res) => {
   try {
     const logs = await StockLog.find({})
