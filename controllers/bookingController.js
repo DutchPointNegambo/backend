@@ -1,6 +1,7 @@
 import Booking from '../models/Booking.js';
 import Room from '../models/Room.js';
 import User from '../models/User.js';
+import Offer from '../models/Offer.js';
 import crypto from 'crypto';
 import { createNotification } from './notificationController.js';
 import sendEmail from '../utils/sendEmail.js';
@@ -124,23 +125,26 @@ export const createBooking = async (req, res) => {
         let unitPrice = room.price;
         const subtotal = isDayUse ? unitPrice : unitPrice * nights;
         
-        // Offer logic (August Deluxe Special)
+        // Offer logic (Dynamic Offers)
         let discount = 0;
-        const isAugust = startDate.getMonth() === 7; 
-        const isDeluxe = room.type === 'deluxe';
+        
+        // Find active offer for this room type on the check-in date
+        const activeOffer = await Offer.findOne({
+            isActive: true,
+            startDate: { $lte: startDate },
+            endDate: { $gte: startDate },
+            applicableRoomTypes: room.type
+        }).sort({ discountPercentage: -1 });
 
-        if (isAugust && isDeluxe) {
-            const baseOfferPrice = 15000;
-            const discountAmountPerUnit = baseOfferPrice * 0.25; 
-            const finalUnitPrice = baseOfferPrice - discountAmountPerUnit;
+        if (activeOffer) {
+            const discountFraction = activeOffer.discountPercentage / 100;
+            const discountAmountPerUnit = unitPrice * discountFraction;
+            const finalUnitPrice = unitPrice - discountAmountPerUnit;
 
-            const offerSubtotal = baseOfferPrice * (isDayUse ? 1 : nights);
+            const offerSubtotal = unitPrice * (isDayUse ? 1 : nights);
             const offerTotal = finalUnitPrice * (isDayUse ? 1 : nights);
             
-            
-            const currentSubtotal = offerSubtotal;
             discount = offerSubtotal - offerTotal;
-            
         }
 
         const total = subtotal - discount; 
@@ -157,12 +161,12 @@ export const createBooking = async (req, res) => {
             checkOut: endDate,
             guests,
             nights,
-            subtotal: (isAugust && isDeluxe) ? (15000 * (isDayUse ? 1 : nights)) : subtotal,
+            subtotal: subtotal,
             discount,
-            total: (isAugust && isDeluxe) ? (15000 * 0.75 * (isDayUse ? 1 : nights)) : total,
+            total: total,
             status: 'confirmed',
             paymentMethod,
-            paidAmount: paymentMethod === 'card' ? ((isAugust && isDeluxe) ? (15000 * 0.75 * (isDayUse ? 1 : nights)) : total) : 0,
+            paidAmount: paymentMethod === 'card' ? total : 0,
             paymentStatus: paymentMethod === 'card' ? 'fully_paid' : 'pending',
             paymentDetails,
             paymentDate: paymentMethod === 'card' ? new Date() : null
