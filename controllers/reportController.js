@@ -29,7 +29,7 @@ export const getReportSummary = async (req, res) => {
         ] = await Promise.all([
           
             Booking.aggregate([
-                { $match: { status: { $in: ['confirmed', 'completed'] }, ...dateFilter } },
+                { $match: { status: { $in: ['reserved', 'checked_in', 'checked_out'] }, ...dateFilter } },
                 { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } },
             ]),
             
@@ -125,7 +125,7 @@ export const getMonthlyRevenue = async (req, res) => {
             Booking.aggregate([
                 {
                     $match: {
-                        status: { $in: ['confirmed', 'completed'] },
+                        status: { $in: ['reserved', 'checked_in', 'checked_out'] },
                         createdAt: { $gte: new Date(`${year}-01-01`), $lte: new Date(`${year}-12-31`) },
                     },
                 },

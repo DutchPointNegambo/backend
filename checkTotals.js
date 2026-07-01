@@ -15,7 +15,7 @@ const checkTotals = async () => {
         
         const [bookings, food, events, payroll, stock] = await Promise.all([
             Booking.aggregate([
-                { $match: { status: { $in: ['confirmed', 'completed'] } } },
+                { $match: { status: { $in: ['reserved', 'checked_in', 'checked_out'] } } },
                 { $group: { _id: null, total: { $sum: '$total' } } }
             ]),
             Order.aggregate([
