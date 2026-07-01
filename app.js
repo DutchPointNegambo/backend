@@ -15,11 +15,8 @@ import eventFeatureRoutes from './routes/eventFeatureRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import foodRoutes from './routes/foodRoutes.js';
 import inventoryRoutes from './routes/inventoryRoutes.js';
-<<<<<<< HEAD
 import offerRoutes from './routes/offerRoutes.js';
-=======
 import roomFeatureRoutes from './routes/roomFeatureRoutes.js';
->>>>>>> cec89f82bcfabe27b2e2c7232b5fb25030a437c3
 import connectDB from './config/database.js';
 
 dotenv.config();
@@ -63,11 +60,8 @@ app.use('/api/event-features', eventFeatureRoutes);
 app.use('/api/foods', foodRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/inventory', inventoryRoutes);
-<<<<<<< HEAD
 app.use('/api/offers', offerRoutes);
-=======
 app.use('/api/room-features', roomFeatureRoutes);
->>>>>>> cec89f82bcfabe27b2e2c7232b5fb25030a437c3
 
 app.get('/api/health', (req, res) => {
     res.json({ message: 'API is running' });
