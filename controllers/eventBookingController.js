@@ -1,13 +1,13 @@
 import EventBooking from '../models/EventBooking.js'
 import sendEmail from '../utils/sendEmail.js'
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 const toDateOnly = (dateStr) => {
     const d = new Date(dateStr)
     return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
 }
 
-/** Detect card brand from number */
+
 const detectCardBrand = (num) => {
     const n = num.replace(/\s/g, '')
     if (/^4/.test(n)) return 'Visa'
@@ -17,7 +17,7 @@ const detectCardBrand = (num) => {
     return 'Unknown'
 }
 
-// ─── Public: Check Availability ───────────────────────────────────────────────
+//Check Availability 
 export const checkAvailability = async (req, res) => {
     try {
         const { date, slot } = req.query
@@ -40,7 +40,7 @@ export const checkAvailability = async (req, res) => {
     }
 }
 
-// ─── Public: Create Event Booking ─────────────────────────────────────────────
+//Create
 export const createEventBooking = async (req, res) => {
     try {
         const {
@@ -52,13 +52,13 @@ export const createEventBooking = async (req, res) => {
             decoration,
             foodPackage,
             totalAmount,
-            paymentType,     // 'deposit' | 'full'
-            cardDetails,     // { number, expiry, cvv, name }
+            paymentType,
+            cardDetails,
             specialRequests,
-            addons,          // [{ name, price }]
+            addons,
         } = req.body
 
-        // ── Validate guest info ──────────────────────────────────────────
+
         if (!guestInfo?.firstName || !guestInfo?.lastName || !guestInfo?.email) {
             return res.status(400).json({ message: 'First name, last name, and email are required.' })
         }
@@ -70,7 +70,7 @@ export const createEventBooking = async (req, res) => {
             return res.status(400).json({ message: 'Phone number must be 10 digits.' })
         }
 
-        // ── Validate card ────────────────────────────────────────────────
+
         if (!cardDetails || !cardDetails.number || !cardDetails.expiry || !cardDetails.cvv || !cardDetails.name) {
             return res.status(400).json({ message: 'All card details are required.' })
         }
@@ -109,7 +109,7 @@ export const createEventBooking = async (req, res) => {
             return res.status(400).json({ message: 'CVV must be 3 or 4 digits.' })
         }
 
-        // ── Conflict check ───────────────────────────────────────────────
+
         const dateOnly = toDateOnly(eventDate)
         const nextDay = new Date(dateOnly.getTime() + 24 * 60 * 60 * 1000)
 
@@ -125,7 +125,7 @@ export const createEventBooking = async (req, res) => {
             })
         }
 
-        // ── Calculate payment ────────────────────────────────────────────
+        //Calculate payment
         const pType = paymentType === 'deposit' ? 'deposit' : 'full'
         const paidAmount = pType === 'deposit' ? Math.round(totalAmount * 0.25) : totalAmount
         const paymentStatus = pType === 'deposit' ? 'deposit_paid' : 'fully_paid'
@@ -157,10 +157,10 @@ export const createEventBooking = async (req, res) => {
             addons: addons || [],
         })
 
-        // Populate decoration and foodPackage for the email
+
         await booking.populate('decoration foodPackage')
 
-        // ── Send Confirmation Email ─────────────────────────────────────
+        //email
         try {
             const emailHtml = `
                 <div style="font-family: 'Inter', sans-serif; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">
@@ -210,7 +210,7 @@ export const createEventBooking = async (req, res) => {
             })
         } catch (emailErr) {
             console.error('Email failed to send:', emailErr)
-            // We don't fail the booking if email fails, but we log it
+
         }
 
         return res.status(201).json(booking)
@@ -219,29 +219,29 @@ export const createEventBooking = async (req, res) => {
     }
 }
 
-// ─── Public: Get own bookings ─────────────────────────────────────────────────
-export const getEventBookings = async (req, res) => {
-    try {
-        let bookings
-        if (req.user.role === 'admin') {
-            bookings = await EventBooking.find({})
-                .populate('user', 'firstName lastName email')
-                .populate('decoration', 'name')
-                .populate('foodPackage', 'name')
-                .sort({ eventDate: 1 })
-        } else {
-            bookings = await EventBooking.find({ user: req.user.id })
-                .populate('decoration', 'name')
-                .populate('foodPackage', 'name')
-                .sort({ eventDate: 1 })
-        }
-        return res.json(bookings)
-    } catch (error) {
-        return res.status(500).json({ message: error.message })
-    }
-}
+//old method to get bookings
+// export const getEventBookings = async (req, res) => {
+//     try {
+//         let bookings
+//         if (req.user.role === 'admin') {
+//             bookings = await EventBooking.find({})
+//                 .populate('user', 'firstName lastName email')
+//                 .populate('decoration', 'name')
+//                 .populate('foodPackage', 'name')
+//                 .sort({ eventDate: 1 })
+//         } else {
+//             bookings = await EventBooking.find({ user: req.user.id })
+//                 .populate('decoration', 'name')
+//                 .populate('foodPackage', 'name')
+//                 .sort({ eventDate: 1 })
+//         }
+//         return res.json(bookings)
+//     } catch (error) {
+//         return res.status(500).json({ message: error.message })
+//     }
+// }
 
-// ─── Admin: Get all event bookings (paginated + filtered) ─────────────────────
+// Admin:Get all event bookings
 export const adminGetEventBookings = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1
@@ -278,7 +278,7 @@ export const adminGetEventBookings = async (req, res) => {
     }
 }
 
-// ─── Admin: Update event booking status ───────────────────────────────────────
+// Admin: Update event booking status
 export const adminUpdateEventStatus = async (req, res) => {
     try {
         const booking = await EventBooking.findById(req.params.id)
@@ -293,7 +293,7 @@ export const adminUpdateEventStatus = async (req, res) => {
     }
 }
 
-// ─── User: Get My Event Bookings ──────────────────────────────────────────────
+// Get My Event Bookings
 export const getMyEventBookings = async (req, res) => {
     try {
         const bookings = await EventBooking.find({ user: req.user._id })
@@ -306,7 +306,7 @@ export const getMyEventBookings = async (req, res) => {
     }
 }
 
-// ─── Admin: Update event payment status ───────────────────────────────────────
+// Admin: Update event payment status
 export const adminUpdateEventPayment = async (req, res) => {
     try {
         const booking = await EventBooking.findById(req.params.id)

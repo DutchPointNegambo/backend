@@ -14,7 +14,7 @@ const inventorySchema = new mongoose.Schema({
   category: {
     type: String,
     required: true,
-    enum: ['Food & Beverage', 'Housekeeping', 'Maintenance', 'Office Supplies', 'Other'],
+    enum: ['Housekeeping', 'Kitchen & Restaurant', 'Maintenance', 'Bar', 'Furniture & Equipment', 'Office Supplies', 'Other'],
   },
   quantity: {
     type: Number,
@@ -39,6 +39,13 @@ const inventorySchema = new mongoose.Schema({
   price: {
     type: Number,
     default: 0,
+  },
+  expiryDate: {
+    type: Date,
+  },
+  warrantyInfo: {
+    type: String,
+    trim: true,
   },
   status: {
     type: String,
