@@ -35,7 +35,7 @@ const eventBookingSchema = new mongoose.Schema(
             default: 'pending',
         },
 
-        // ─── Payment Fields ─────────────────────────────────────────────
+
         paymentType: {
             type: String,
             enum: ['deposit', 'full'],
