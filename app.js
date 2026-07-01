@@ -15,6 +15,7 @@ import eventFeatureRoutes from './routes/eventFeatureRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import foodRoutes from './routes/foodRoutes.js';
 import inventoryRoutes from './routes/inventoryRoutes.js';
+import payrollRoutes from './routes/payrollRoutes.js';
 import { uploadImage, uploadMiddleware } from './controllers/uploadController.js';
 import connectDB from './config/database.js';
 
@@ -56,6 +57,7 @@ app.use('/api/event-features', eventFeatureRoutes);
 app.use('/api/foods', foodRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/inventory', inventoryRoutes);
+app.use('/api/payroll', payrollRoutes);
 
 // Shared Upload Route (Kept outside /api/admin to avoid global middleware conflict)
 app.post('/api/upload/image', uploadMiddleware, uploadImage);
