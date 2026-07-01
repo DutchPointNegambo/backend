@@ -123,7 +123,7 @@ export const adjustStock = async (req, res) => {
       previousQuantity,
       newQuantity,
       reason,
-      unitCost: changeType === 'IN' ? (unitCost || 0) : 0,
+      unitCost: changeType === 'IN' ? (unitCost || item.price || 0) : (item.price || 0),
       supplier: changeType === 'IN' ? (req.body.supplier || item.supplier) : null
     });
 
