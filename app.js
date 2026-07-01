@@ -1,6 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
+
 import authRoutes from './routes/authRoutes.js';
 import employeeRoutes from './routes/employeeRoutes.js';
 import staffSelfRoutes from './routes/staffSelfRoutes.js';
@@ -15,8 +16,15 @@ import eventFeatureRoutes from './routes/eventFeatureRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import foodRoutes from './routes/foodRoutes.js';
 import inventoryRoutes from './routes/inventoryRoutes.js';
+
+// merged routes (both branches kept)
 import payrollRoutes from './routes/payrollRoutes.js';
+import offerRoutes from './routes/offerRoutes.js';
+import roomFeatureRoutes from './routes/roomFeatureRoutes.js';
+
+// upload controller (from anjana branch)
 import { uploadImage, uploadMiddleware } from './controllers/uploadController.js';
+
 import connectDB from './config/database.js';
 
 dotenv.config();
@@ -43,6 +51,7 @@ app.use(cors({
 
 app.use(express.json());
 
+// routes
 app.use('/api/auth', authRoutes);
 app.use('/api/staff', staffSelfRoutes);
 app.use('/api/admin', employeeRoutes);
@@ -57,9 +66,13 @@ app.use('/api/event-features', eventFeatureRoutes);
 app.use('/api/foods', foodRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/inventory', inventoryRoutes);
-app.use('/api/payroll', payrollRoutes);
 
-// Shared Upload Route (Kept outside /api/admin to avoid global middleware conflict)
+// merged new modules
+app.use('/api/payroll', payrollRoutes);
+app.use('/api/offers', offerRoutes);
+app.use('/api/room-features', roomFeatureRoutes);
+
+// shared upload route
 app.post('/api/upload/image', uploadMiddleware, uploadImage);
 
 app.get('/api/health', (req, res) => {

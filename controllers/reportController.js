@@ -1,6 +1,10 @@
 import Booking from '../models/Booking.js';
 import Room from '../models/Room.js';
-import Staff from '../models/Staff.js';
+import Employee from '../models/Employee.js';
+import Order from '../models/Order.js';
+import EventBooking from '../models/EventBooking.js';
+import StockLog from '../models/StockLog.js';
+import Attendance from '../models/Attendance.js';
 
 
 export const getReportSummary = async (req, res) => {
@@ -13,14 +17,40 @@ export const getReportSummary = async (req, res) => {
             if (to) dateFilter.createdAt.$lte = new Date(to);
         }
 
-        const [revenueResult, salaryResult, bookingsByStatus, roomsByStatus] = await Promise.all([
+        const [
+            revenueResult, 
+            foodRevenueResult,
+            eventRevenueResult,
+            salaryResult, 
+            inventoryExpenseResult,
+            bookingsByStatus, 
+            roomsByStatus,
+            attendanceResult
+        ] = await Promise.all([
+          
             Booking.aggregate([
                 { $match: { status: { $in: ['confirmed', 'completed'] }, ...dateFilter } },
                 { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } },
             ]),
-            Staff.aggregate([
+            
+            Order.aggregate([
+                { $match: { status: { $in: ['pending', 'paid', 'preparing', 'delivered'] }, ...dateFilter } },
+                { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } },
+            ]),
+            
+            EventBooking.aggregate([
+                { $match: { status: { $in: ['confirmed', 'completed'] }, ...dateFilter } },
+                { $group: { _id: null, total: { $sum: '$totalAmount' }, count: { $sum: 1 } } },
+            ]),
+         
+            Employee.aggregate([
                 { $match: { status: 'Active' } },
                 { $group: { _id: null, total: { $sum: '$salary' } } },
+            ]),
+          
+            StockLog.aggregate([
+                { $match: { changeType: 'IN', ...dateFilter } },
+                { $group: { _id: null, total: { $sum: { $multiply: ['$quantity', '$unitCost'] } } } },
             ]),
             Booking.aggregate([
                 { $match: dateFilter },
@@ -29,11 +59,38 @@ export const getReportSummary = async (req, res) => {
             Room.aggregate([
                 { $group: { _id: '$status', count: { $sum: 1 } } },
             ]),
+           
+            Attendance.find(dateFilter ? { date: dateFilter.createdAt } : {})
+                .populate('employee', 'salary status')
         ]);
 
-        const totalRevenue = revenueResult[0]?.total || 0;
-        const monthlyExpenses = salaryResult[0]?.total || 0;
-        const netProfit = totalRevenue - monthlyExpenses;
+        const roomRevenue = revenueResult[0]?.total || 0;
+        const foodRevenue = foodRevenueResult[0]?.total || 0;
+        const eventRevenue = eventRevenueResult[0]?.total || 0;
+        const totalRevenue = roomRevenue + foodRevenue + eventRevenue;
+        
+       
+        let actualPayroll = 0;
+        if (attendanceResult.length > 0) {
+            attendanceResult.forEach(record => {
+                if (record.employee && record.employee.salary) {
+                    const dailyRate = record.employee.salary / 26; // Assume 26 working days
+                    let effectiveDays = 0;
+                    if (record.status === 'Present' || record.status === 'Late') effectiveDays = 1;
+                    else if (record.status === 'Half-Day') effectiveDays = 0.5;
+                    
+                    actualPayroll += (dailyRate * effectiveDays);
+                }
+            });
+        } else if (!from && !to) {
+            // If no range selected and no attendance, fallback to full monthly salaries for current dashboard
+            actualPayroll = salaryResult[0]?.total || 0;
+        }
+
+        const inventoryExpenses = inventoryExpenseResult[0]?.total || 0;
+        const operationalExpenses = actualPayroll + inventoryExpenses;
+        
+        const netProfit = totalRevenue - operationalExpenses;
 
         const totalRooms = roomsByStatus.reduce((s, r) => s + r.count, 0);
         const occupiedRooms = roomsByStatus.find((r) => r._id === 'occupied')?.count || 0;
@@ -41,9 +98,15 @@ export const getReportSummary = async (req, res) => {
 
         res.json({
             totalRevenue,
-            monthlyExpenses,
+            roomRevenue,
+            foodRevenue,
+            eventRevenue,
+            operationalExpenses,
+            monthlySalaries: actualPayroll,
+            inventoryExpenses,
             netProfit,
-            bookingCount: revenueResult[0]?.count || 0,
+            bookingCount: (revenueResult[0]?.count || 0) + (eventRevenueResult[0]?.count || 0),
+            foodOrderCount: foodRevenueResult[0]?.count || 0,
             occupancyRate,
             bookingsByStatus,
             roomsByStatus,
@@ -58,29 +121,50 @@ export const getMonthlyRevenue = async (req, res) => {
     try {
         const year = parseInt(req.query.year) || new Date().getFullYear();
 
-        const revenue = await Booking.aggregate([
-            {
-                $match: {
-                    status: { $in: ['confirmed', 'completed'] },
-                    createdAt: {
-                        $gte: new Date(`${year}-01-01`),
-                        $lte: new Date(`${year}-12-31`),
+        const [roomRevenue, foodRevenue, eventRevenue] = await Promise.all([
+            Booking.aggregate([
+                {
+                    $match: {
+                        status: { $in: ['confirmed', 'completed'] },
+                        createdAt: { $gte: new Date(`${year}-01-01`), $lte: new Date(`${year}-12-31`) },
                     },
                 },
-            },
-            {
-                $group: {
-                    _id: { $month: '$createdAt' },
-                    revenue: { $sum: '$total' },
-                    count: { $sum: 1 },
+                { $group: { _id: { $month: '$createdAt' }, revenue: { $sum: '$total' }, count: { $sum: 1 } } },
+            ]),
+            Order.aggregate([
+                {
+                    $match: {
+                        status: { $in: ['paid', 'delivered'] },
+                        createdAt: { $gte: new Date(`${year}-01-01`), $lte: new Date(`${year}-12-31`) },
+                    },
                 },
-            },
-            { $sort: { _id: 1 } },
+                { $group: { _id: { $month: '$createdAt' }, revenue: { $sum: '$total' }, count: { $sum: 1 } } },
+            ]),
+            EventBooking.aggregate([
+                {
+                    $match: {
+                        status: { $in: ['confirmed', 'completed'] },
+                        createdAt: { $gte: new Date(`${year}-01-01`), $lte: new Date(`${year}-12-31`) },
+                    },
+                },
+                { $group: { _id: { $month: '$createdAt' }, revenue: { $sum: '$totalAmount' }, count: { $sum: 1 } } },
+            ]),
         ]);
 
         const monthlyData = Array.from({ length: 12 }, (_, i) => {
-            const found = revenue.find((r) => r._id === i + 1);
-            return { month: i + 1, revenue: found?.revenue || 0, count: found?.count || 0 };
+            const month = i + 1;
+            const r = roomRevenue.find(x => x._id === month)?.revenue || 0;
+            const f = foodRevenue.find(x => x._id === month)?.revenue || 0;
+            const e = eventRevenue.find(x => x._id === month)?.revenue || 0;
+            
+            const rc = roomRevenue.find(x => x._id === month)?.count || 0;
+            const ec = eventRevenue.find(x => x._id === month)?.count || 0;
+
+            return { 
+                month, 
+                revenue: r + f + e, 
+                count: rc + ec // Counting bookings only for the count chart
+            };
         });
 
         res.json(monthlyData);

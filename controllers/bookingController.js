@@ -1,6 +1,7 @@
 import Booking from '../models/Booking.js';
 import Room from '../models/Room.js';
 import User from '../models/User.js';
+import Offer from '../models/Offer.js';
 import crypto from 'crypto';
 import { createNotification } from './notificationController.js';
 import sendEmail from '../utils/sendEmail.js';
@@ -119,9 +120,34 @@ export const createBooking = async (req, res) => {
         const isDayUse = room.package === 'day-use';
         const diffTime = Math.abs(endDate - startDate);
         const nights = isDayUse ? 0 : Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        // Day-use packages are charged a flat per-booking rate; full-board uses nights × price
-        const subtotal = isDayUse ? room.price : room.price * nights;
-        const total = subtotal; // For now no discounts
+        
+        // Base calculation
+        let unitPrice = room.price;
+        const subtotal = isDayUse ? unitPrice : unitPrice * nights;
+        
+        // Offer logic (Dynamic Offers)
+        let discount = 0;
+        
+        // Find active offer for this room type on the check-in date
+        const activeOffer = await Offer.findOne({
+            isActive: true,
+            startDate: { $lte: startDate },
+            endDate: { $gte: startDate },
+            applicableRoomTypes: room.type
+        }).sort({ discountPercentage: -1 });
+
+        if (activeOffer) {
+            const discountFraction = activeOffer.discountPercentage / 100;
+            const discountAmountPerUnit = unitPrice * discountFraction;
+            const finalUnitPrice = unitPrice - discountAmountPerUnit;
+
+            const offerSubtotal = unitPrice * (isDayUse ? 1 : nights);
+            const offerTotal = finalUnitPrice * (isDayUse ? 1 : nights);
+            
+            discount = offerSubtotal - offerTotal;
+        }
+
+        const total = subtotal - discount; 
 
         // 4. Create booking
         const bookingId = `BK-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
@@ -135,8 +161,9 @@ export const createBooking = async (req, res) => {
             checkOut: endDate,
             guests,
             nights,
-            subtotal,
-            total,
+            subtotal: subtotal,
+            discount,
+            total: total,
             status: 'confirmed',
             paymentMethod,
             paidAmount: paymentMethod === 'card' ? total : 0,
