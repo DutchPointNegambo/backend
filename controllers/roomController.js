@@ -124,33 +124,60 @@ export const getRooms = async (req, res) => {
       .skip((page - 1) * parseInt(limit))
       .limit(parseInt(limit));
 
-
     const now = new Date();
-    const roomsWithStatus = await Promise.all(rooms.map(async (room) => {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    // Batch resolve related rooms to map room numbers to related IDs
+    const roomNumbers = rooms.map(r => r.roomNumber).filter(Boolean);
+    const allRelatedRooms = roomNumbers.length > 0 
+      ? await Room.find({ roomNumber: { $in: roomNumbers } }) 
+      : [];
+
+    const roomIdsByNumber = {};
+    allRelatedRooms.forEach(r => {
+      if (!roomIdsByNumber[r.roomNumber]) {
+        roomIdsByNumber[r.roomNumber] = [];
+      }
+      roomIdsByNumber[r.roomNumber].push(r._id.toString());
+    });
+
+    // Find all active checked-in bookings for any of these related room IDs
+    const allRelatedIds = allRelatedRooms.map(r => r._id);
+    const activeBookings = allRelatedIds.length > 0
+      ? await Booking.find({
+          room: { $in: allRelatedIds },
+          status: 'checked_in',
+          $or: [
+            { checkIn: { $lte: now }, checkOut: { $gte: now } },
+            { checkIn: { $gte: startOfToday, $lte: endOfToday } }
+          ]
+        }).populate('user', 'firstName lastName email').select('+bookingId')
+      : [];
+
+    // Map room ID -> booking
+    const bookingByRoomId = {};
+    activeBookings.forEach(b => {
+      if (b.room) {
+        bookingByRoomId[b.room.toString()] = b;
+      }
+    });
+
+    const roomsWithStatus = rooms.map(room => {
       const roomObj = room.toObject();
       roomObj.dbStatus = room.status;
 
-
       if (roomObj.status !== 'maintenance') {
-        const relatedRooms = await Room.find({ roomNumber: room.roomNumber });
-        const relatedIds = relatedRooms.map(r => r._id);
-
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
-        const endOfToday = new Date();
-        endOfToday.setHours(23, 59, 59, 999);
-
-        // Find any checked-in booking
-        const activeBooking = await Booking.findOne({
-          room: { $in: relatedIds },
-          status: 'checked_in',
-          $or: [
-            // Currently staying
-            { checkIn: { $lte: now }, checkOut: { $gte: now } },
-            // Starting today
-            { checkIn: { $gte: startOfToday, $lte: endOfToday } }
-          ]
-        }).populate('user', 'firstName lastName email').select('+bookingId');
+        const relatedIds = roomIdsByNumber[room.roomNumber] || [];
+        let activeBooking = null;
+        for (const id of relatedIds) {
+          if (bookingByRoomId[id]) {
+            activeBooking = bookingByRoomId[id];
+            break;
+          }
+        }
 
         if (activeBooking) {
           roomObj.status = 'occupied';
@@ -159,7 +186,7 @@ export const getRooms = async (req, res) => {
       }
 
       return roomObj;
-    }));
+    });
 
     res.json({
       rooms: roomsWithStatus,
