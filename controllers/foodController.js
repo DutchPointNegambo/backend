@@ -17,13 +17,19 @@ export const getFoods = async (req, res) => {
 // @access  Private/Admin
 export const createFood = async (req, res) => {
     try {
-        const { name, description, category, price, status, image, rating, prepTime } = req.body;
+        const { name, description, category, price, status, image, rating, prepTime, productionPrice, discount, sellingPrice } = req.body;
+
+        const itemDiscount = parseFloat(discount) || 0;
+        const calculatedSellingPrice = price ? (price - (price * (itemDiscount / 100))) : sellingPrice;
 
         const food = new Food({
             name,
             description,
             category,
             price,
+            productionPrice,
+            discount,
+            sellingPrice: calculatedSellingPrice,
             status,
             image,
             rating,
@@ -42,7 +48,7 @@ export const createFood = async (req, res) => {
 // @access  Private/Admin
 export const updateFood = async (req, res) => {
     try {
-        const { name, description, category, price, status, image, rating, prepTime } = req.body;
+        const { name, description, category, price, status, image, rating, prepTime, productionPrice, discount, sellingPrice } = req.body;
 
         const food = await Food.findById(req.params.id);
 
@@ -50,7 +56,15 @@ export const updateFood = async (req, res) => {
             food.name = name || food.name;
             food.description = description !== undefined ? description : food.description;
             food.category = category || food.category;
-            food.price = price || food.price;
+            food.price = price !== undefined ? price : food.price;
+            food.productionPrice = productionPrice !== undefined ? productionPrice : food.productionPrice;
+            food.discount = discount !== undefined ? discount : food.discount;
+            
+            // Recalculate selling price
+            const p = price !== undefined ? price : food.price;
+            const d = discount !== undefined ? discount : food.discount;
+            food.sellingPrice = p - (p * (d / 100));
+            
             food.status = status || food.status;
             food.image = image !== undefined ? image : food.image;
             food.rating = rating || food.rating;
