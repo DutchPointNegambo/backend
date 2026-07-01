@@ -35,7 +35,7 @@ export const getRoomsByCategory = async (req, res) => {
 
     const bookings = await Booking.find({
       room: { $in: allRelatedIds },
-      status: { $in: ['confirmed', 'pending'] },
+      status: { $in: ['reserved', 'checked_in', 'pending'] },
       $or: [
         { checkIn: { $lte: end }, checkOut: { $gte: start } }
       ]
@@ -53,7 +53,7 @@ export const getRoomsByCategory = async (req, res) => {
 
       return {
         ...room.toObject(),
-        isAvailable: !isOccupied
+        isAvailable: !isOccupied && room.status === 'available'
       };
     });
 
@@ -81,6 +81,9 @@ export const checkRoomAvailability = async (req, res) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
+    if (room.status === 'maintenance') {
+      return res.json({ available: false });
+    }
 
     const relatedRooms = await Room.find({ roomNumber: room.roomNumber });
     const relatedIds = relatedRooms.map(r => r._id);
@@ -88,7 +91,7 @@ export const checkRoomAvailability = async (req, res) => {
 
     const overlappingBooking = await Booking.findOne({
       room: { $in: relatedIds },
-      status: { $in: ['confirmed', 'pending'] },
+      status: { $in: ['reserved', 'checked_in', 'pending'] },
       $or: [
         { checkIn: { $lte: end }, checkOut: { $gte: start } }
       ]
@@ -137,10 +140,10 @@ export const getRooms = async (req, res) => {
         const endOfToday = new Date();
         endOfToday.setHours(23, 59, 59, 999);
 
-        // Find any active booking or one that starts today
+        // Find any checked-in booking
         const activeBooking = await Booking.findOne({
           room: { $in: relatedIds },
-          status: { $in: ['confirmed', 'pending'] },
+          status: 'checked_in',
           $or: [
             // Currently staying
             { checkIn: { $lte: now }, checkOut: { $gte: now } },
@@ -193,11 +196,21 @@ export const createRoom = async (req, res) => {
 // update room
 export const updateRoom = async (req, res) => {
   try {
+    const existingRoom = await Room.findById(req.params.id);
+    if (!existingRoom) return res.status(404).json({ message: 'Room not found' });
+    
+    if (existingRoom.status === 'occupied' && req.body.status && req.body.status !== 'occupied') {
+      return res.status(400).json({ message: 'Cannot manually change the status of an occupied room. Must be done via check-out.' });
+    }
+    
+    if (req.body.status === 'maintenance' && existingRoom.status !== 'available' && existingRoom.status !== 'maintenance') {
+      return res.status(400).json({ message: 'Only available rooms can be set to maintenance.' });
+    }
+
     const room = await Room.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
     });
-    if (!room) return res.status(404).json({ message: 'Room not found' });
     res.json(room);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -210,18 +223,29 @@ export const updateRoomStatusByNumber = async (req, res) => {
     const { roomNumber } = req.params;
     const { status } = req.body;
 
-    if (!['available', 'occupied', 'maintenance'].includes(status)) {
+    if (!['available', 'reserved', 'occupied', 'maintenance'].includes(status)) {
       return res.status(400).json({ message: 'Invalid status' });
+    }
+
+    const rooms = await Room.find({ roomNumber });
+    if (rooms.length === 0) {
+      return res.status(404).json({ message: 'No rooms found with this room number' });
+    }
+
+    const isOccupied = rooms.some(r => r.status === 'occupied');
+    if (isOccupied && status !== 'occupied') {
+       return res.status(400).json({ message: 'Cannot manually change the status of occupied rooms.' });
+    }
+    
+    const isReserved = rooms.some(r => r.status === 'reserved');
+    if (status === 'maintenance' && isReserved) {
+       return res.status(400).json({ message: 'Cannot set reserved rooms to maintenance.' });
     }
 
     const result = await Room.updateMany(
       { roomNumber },
       { $set: { status } }
     );
-
-    if (result.matchedCount === 0) {
-      return res.status(404).json({ message: 'No rooms found with this room number' });
-    }
 
     res.json({ message: `Updated ${result.modifiedCount} room(s) to ${status}` });
   } catch (error) {

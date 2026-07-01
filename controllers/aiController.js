@@ -28,11 +28,11 @@ export const getAiExecutiveSummary = async (req, res) => {
         ] = await Promise.all([
             Booking.countDocuments(),
             Booking.countDocuments({ status: 'pending' }),
-            Booking.countDocuments({ status: 'confirmed' }),
+            Booking.countDocuments({ status: 'reserved' }),
             User.countDocuments({ role: 'guest' }),
             Room.countDocuments({ status: 'available' }),
             Booking.aggregate([
-                { $match: { status: { $in: ['confirmed', 'completed'] } } },
+                { $match: { status: { $in: ['reserved', 'checked_in', 'checked_out'] } } },
                 { $group: { _id: null, total: { $sum: '$total' } } },
             ]),
             Order.find().sort({ createdAt: -1 }).limit(10),

@@ -46,7 +46,7 @@ export const createBooking = async (req, res) => {
         // 3. Check for overlapping bookings
         const overlappingBooking = await Booking.findOne({
             room: { $in: relatedIds },
-            status: { $in: ['confirmed', 'pending'] },
+            status: { $in: ['reserved', 'checked_in', 'pending'] },
             $or: [
                 { checkIn: { $lte: endDate }, checkOut: { $gte: startDate } }
             ]
@@ -164,7 +164,7 @@ export const createBooking = async (req, res) => {
             subtotal: subtotal,
             discount,
             total: total,
-            status: 'confirmed',
+            status: 'reserved',
             paymentMethod,
             paidAmount: paymentMethod === 'card' ? total : 0,
             paymentStatus: paymentMethod === 'card' ? 'fully_paid' : 'pending',
@@ -183,6 +183,8 @@ export const createBooking = async (req, res) => {
             link: `/admin/bookings`,
             metadata: { bookingId: booking._id, roomNumber: room.roomNumber }
         });
+
+        // Room physical status remains 'available' to allow other bookings until guest checks in.
 
         res.status(201).json(booking);
 
@@ -291,13 +293,42 @@ export const getBookingById = async (req, res) => {
 export const updateBookingStatus = async (req, res) => {
     try {
         const { status } = req.body;
-        const valid = ['pending', 'confirmed', 'completed', 'cancelled'];
+        const valid = ['pending', 'reserved', 'checked_in', 'checked_out', 'cancelled'];
         if (!valid.includes(status)) {
             return res.status(400).json({ message: 'Invalid status value' });
         }
 
-        const oldBooking = await Booking.findById(req.params.id);
-        const oldStatus = oldBooking?.status;
+        const oldBooking = await Booking.findById(req.params.id).populate('room');
+        if (!oldBooking) return res.status(404).json({ message: 'Booking not found' });
+        
+        const oldStatus = oldBooking.status;
+        const room = oldBooking.room;
+
+        if (status === 'checked_in') {
+            if (oldStatus !== 'reserved') return res.status(400).json({ message: 'Only reserved bookings can be checked in.' });
+            
+            const todayStr = new Date().toDateString();
+            const checkInDateStr = new Date(oldBooking.checkIn).toDateString();
+            if (todayStr !== checkInDateStr) {
+                return res.status(400).json({ message: 'Check-in is only allowed on the scheduled check-in date.' });
+            }
+            
+            if (room.status === 'occupied' || room.status === 'maintenance') {
+                return res.status(400).json({ message: 'Room is currently occupied or under maintenance.' });
+            }
+            
+            await Room.updateMany({ roomNumber: room.roomNumber }, { $set: { status: 'occupied' } });
+        }
+        
+        if (status === 'checked_out') {
+            if (oldStatus !== 'checked_in') return res.status(400).json({ message: 'Only checked-in bookings can be checked out.' });
+            
+            await Room.updateMany({ roomNumber: room.roomNumber }, { $set: { status: 'available' } });
+        }
+        
+        if (status === 'cancelled' && (oldStatus === 'reserved' || oldStatus === 'checked_in')) {
+            await Room.updateMany({ roomNumber: room.roomNumber }, { $set: { status: 'available' } });
+        }
 
         const booking = await Booking.findByIdAndUpdate(
             req.params.id,
@@ -306,8 +337,6 @@ export const updateBookingStatus = async (req, res) => {
         )
             .populate('user', 'firstName lastName email')
             .populate('room', 'name type');
-
-        if (!booking) return res.status(404).json({ message: 'Booking not found' });
 
         // Notification for cancellation
         if (status === 'cancelled') {
@@ -342,11 +371,11 @@ export const getDashboardStats = async (req, res) => {
         ] = await Promise.all([
             Booking.countDocuments(),
             Booking.countDocuments({ status: 'pending' }),
-            Booking.countDocuments({ status: 'confirmed' }),
+            Booking.countDocuments({ status: 'reserved' }),
             User.countDocuments({ role: 'guest' }),
             Room.countDocuments({ status: { $ne: 'maintenance' } }),
             Booking.aggregate([
-                { $match: { status: { $in: ['confirmed', 'completed'] } } },
+                { $match: { status: { $in: ['reserved', 'checked_in', 'checked_out'] } } },
                 { $group: { _id: null, total: { $sum: '$total' } } },
             ]),
         ]);
@@ -372,7 +401,7 @@ export const getMonthlyRevenue = async (req, res) => {
         const revenue = await Booking.aggregate([
             {
                 $match: {
-                    status: { $in: ['confirmed', 'completed'] },
+                    status: { $in: ['reserved', 'checked_in', 'checked_out'] },
                     createdAt: {
                         $gte: new Date(`${year}-01-01`),
                         $lte: new Date(`${year}-12-31`),
