@@ -1,8 +1,5 @@
 import multer from 'multer';
-
-// Configuration
-const CLOUD_NAME = 'dtdgufs9u';
-const UPLOAD_PRESET = 'hotel_main';
+import { v2 as cloudinary } from 'cloudinary';
 
 // Configure Multer (Memory Storage)
 const storage = multer.memoryStorage();
@@ -17,17 +14,53 @@ export const uploadImage = async (req, res) => {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
 
-    console.log('Backend proxying upload using native fetch:', req.file.originalname);
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME || 'dtdgufs9u';
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+    const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET || 'hotel_main';
 
-    // Create FormData
+    console.log('Backend proxying upload for:', req.file.originalname);
+
+    // 1. If SDK configuration exists, use signed upload via stream (highly recommended)
+    if (cloudName && apiKey && apiSecret) {
+      console.log('Using Cloudinary SDK signed upload');
+      cloudinary.config({
+        cloud_name: cloudName,
+        api_key: apiKey,
+        api_secret: apiSecret
+      });
+
+      // Convert buffer upload to a promise-based stream
+      const uploadFromBuffer = (fileBuffer) => {
+        return new Promise((resolve, reject) => {
+          const uploadStream = cloudinary.uploader.upload_stream(
+            { folder: 'hotel_menu' },
+            (error, result) => {
+              if (error) return reject(error);
+              resolve(result);
+            }
+          );
+          uploadStream.end(fileBuffer);
+        });
+      };
+
+      const result = await uploadFromBuffer(req.file.buffer);
+      console.log('SDK upload successful! URL:', result.secure_url);
+      return res.status(200).json({
+        success: true,
+        url: result.secure_url
+      });
+    }
+
+    // 2. Fallback to unsigned upload via fetch using preset
+    console.log(`Using fetch unsigned upload (preset: ${uploadPreset}, cloud: ${cloudName})`);
     const formData = new FormData();
     const blob = new Blob([req.file.buffer], { type: req.file.mimetype });
     formData.append('file', blob, req.file.originalname);
-    formData.append('upload_preset', UPLOAD_PRESET);
+    formData.append('upload_preset', uploadPreset);
 
-    // Upload to Cloudinary using native Fetch (Node 18+)
     const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
+      `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
       {
         method: 'POST',
         body: formData,
@@ -44,19 +77,20 @@ export const uploadImage = async (req, res) => {
       });
     }
 
-    console.log('Upload success via native fetch');
-
-    res.status(200).json({
+    console.log('Unsigned upload success via fetch');
+    return res.status(200).json({
       success: true,
       url: data.secure_url
     });
+
   } catch (error) {
-    console.error('Fetch Proxy Error:', error);
+    console.error('Upload Error:', error);
     res.status(500).json({ 
         success: false, 
-        message: 'Network Error: ' + error.message 
+        message: 'Network/Server Error: ' + error.message 
     });
   }
 };
 
 export const uploadMiddleware = upload.single('file');
+
