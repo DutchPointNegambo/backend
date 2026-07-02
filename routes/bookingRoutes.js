@@ -5,12 +5,16 @@ import {
     getBookingById, 
     updateBookingStatus,
     getDashboardStats,
-    getMonthlyRevenue
+    getMonthlyRevenue,
+    confirmBookingPayment,
+    getDebugDates
 } from '../controllers/bookingController.js';
 
 const router = express.Router();
 
 router.post('/', createBooking);
+router.post('/:id/confirm-payment', confirmBookingPayment);
+router.get('/debug-dates', getDebugDates);
 router.get('/', getBookings);
 router.get('/stats', getDashboardStats);
 router.get('/revenue', getMonthlyRevenue);

@@ -1,5 +1,14 @@
 import Order from '../models/Order.js';
 import sendEmail from '../utils/sendEmail.js';
+import crypto from 'crypto';
+
+// --- PayHere Hash Helper ---
+const generatePayHereHash = (merchantId, orderId, amount, currency, merchantSecret) => {
+    const hashedSecret = crypto.createHash('md5').update(merchantSecret).digest('hex').toUpperCase();
+    const amountFormatted = Number(amount).toFixed(2);
+    const mainString = merchantId + orderId + amountFormatted + currency + hashedSecret;
+    return crypto.createHash('md5').update(mainString).digest('hex').toUpperCase();
+};
 
 // --- Helpers ---
 const detectCardBrand = (num) => {
@@ -13,52 +22,99 @@ const detectCardBrand = (num) => {
 
 export const createOrder = async (req, res) => {
     try {
-        const { guestInfo, items, subtotal, serviceCharge, total, cardDetails } = req.body;
+        const { guestInfo, items, subtotal, serviceCharge, total, cardDetails, paymentMethod = 'card' } = req.body;
 
-        // --- Card Validation (Same as Booking) ---
-        if (!cardDetails || !cardDetails.number || !cardDetails.expiry || !cardDetails.cvv || !cardDetails.name) {
-            return res.status(400).json({ success: false, message: 'All card details are required.' });
-        }
-
-        const cardNum = cardDetails.number.replace(/\s/g, '');
-        if (!/^\d{13,19}$/.test(cardNum)) {
-            return res.status(400).json({ success: false, message: 'Invalid card number format.' });
-        }
-
-        // Luhn check
-        let sum = 0, alt = false;
-        for (let i = cardNum.length - 1; i >= 0; i--) {
-            let n = parseInt(cardNum[i], 10);
-            if (alt) { n *= 2; if (n > 9) n -= 9; }
-            sum += n;
-            alt = !alt;
-        }
-        if (sum % 10 !== 0) {
-            return res.status(400).json({ success: false, message: 'Card number validation failed.' });
-        }
-
-        const newOrder = new Order({
-            guestInfo,
-            items,
-            subtotal,
-            serviceCharge,
-            total,
-            status: 'paid', // Set to paid immediately
-            paymentStatus: 'paid',
-            paymentDetails: {
-                cardLast4: cardNum.slice(-4),
-                cardBrand: detectCardBrand(cardNum),
-                transactionId: `TXN-FOOD-${Date.now()}`
+        if (paymentMethod === 'card') {
+            // --- Card Validation (Same as Booking) ---
+            if (!cardDetails || !cardDetails.number || !cardDetails.expiry || !cardDetails.cvv || !cardDetails.name) {
+                return res.status(400).json({ success: false, message: 'All card details are required.' });
             }
-        });
 
-        const savedOrder = await newOrder.save();
+            const cardNum = cardDetails.number.replace(/\s/g, '');
+            if (!/^\d{13,19}$/.test(cardNum)) {
+                return res.status(400).json({ success: false, message: 'Invalid card number format.' });
+            }
 
-        res.status(201).json({
-            success: true,
-            message: 'Order created and paid successfully',
-            orderId: savedOrder._id
-        });
+            // Luhn check
+            let sum = 0, alt = false;
+            for (let i = cardNum.length - 1; i >= 0; i--) {
+                let n = parseInt(cardNum[i], 10);
+                if (alt) { n *= 2; if (n > 9) n -= 9; }
+                sum += n;
+                alt = !alt;
+            }
+            if (sum % 10 !== 0) {
+                return res.status(400).json({ success: false, message: 'Card number validation failed.' });
+            }
+
+            const newOrder = new Order({
+                guestInfo,
+                items,
+                subtotal,
+                serviceCharge,
+                total,
+                status: 'paid', // Set to paid immediately
+                paymentStatus: 'paid',
+                paymentDetails: {
+                    cardLast4: cardNum.slice(-4),
+                    cardBrand: detectCardBrand(cardNum),
+                    transactionId: `TXN-FOOD-${Date.now()}`
+                }
+            });
+
+            const savedOrder = await newOrder.save();
+
+            res.status(201).json({
+                success: true,
+                message: 'Order created and paid successfully',
+                orderId: savedOrder._id
+            });
+        } else if (paymentMethod === 'payhere') {
+            const newOrder = new Order({
+                guestInfo,
+                items,
+                subtotal,
+                serviceCharge,
+                total,
+                status: 'pending',
+                paymentStatus: 'pending',
+                paymentDetails: {
+                    note: 'Pending PayHere payment'
+                }
+            });
+
+            const savedOrder = await newOrder.save();
+
+            const merchantId = (process.env.PAYHERE_MERCHANT_ID || '1226209').trim();
+            const merchantSecret = (process.env.PAYHERE_MERCHANT_SECRET || '3262097392333620346221091696102295398843').trim();
+
+            const payhereParams = {
+                sandbox: process.env.PAYHERE_SANDBOX !== 'false',
+                merchant_id: merchantId,
+                return_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment-success`,
+                cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment-cancel`,
+                notify_url: `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/orders/notify`,
+                order_id: savedOrder._id.toString(),
+                items: `Food Order - #${savedOrder._id.toString().slice(-6).toUpperCase()}`,
+                amount: total.toFixed(2),
+                currency: 'LKR',
+                hash: generatePayHereHash(merchantId, savedOrder._id.toString(), total, 'LKR', merchantSecret),
+                first_name: guestInfo.name.split(' ')[0] || 'Guest',
+                last_name: guestInfo.name.split(' ')[1] || 'User',
+                email: guestInfo.email,
+                phone: guestInfo.phone || '0771234567',
+                address: 'Negombo',
+                city: 'Negombo',
+                country: 'Sri Lanka'
+            };
+
+            res.status(201).json({
+                success: true,
+                message: 'Order created pending payment',
+                orderId: savedOrder._id,
+                payhere: payhereParams
+            });
+        }
     } catch (error) {
         console.error('Error creating order:', error);
         res.status(500).json({
@@ -100,11 +156,9 @@ export const getOrderReport = async (req, res) => {
 
         if (from || to) {
             dateQuery.createdAt = {};
-            if (from) dateQuery.createdAt.$gte = new Date(from);
+            if (from) dateQuery.createdAt.$gte = new Date(`${from}T00:00:00.000+05:30`);
             if (to) {
-                const toDate = new Date(to);
-                toDate.setHours(23, 59, 59, 999);
-                dateQuery.createdAt.$lte = toDate;
+                dateQuery.createdAt.$lte = new Date(`${to}T23:59:59.999+05:30`);
             }
         }
 
