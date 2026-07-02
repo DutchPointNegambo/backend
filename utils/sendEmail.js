@@ -1,4 +1,10 @@
 import nodemailer from 'nodemailer';
+import dns from 'dns';
+
+// Force Node.js to resolve IPv4 addresses first (Render does not support outbound IPv6)
+if (typeof dns.setDefaultResultOrder === 'function') {
+    dns.setDefaultResultOrder('ipv4first');
+}
 
 const sendEmail = async (options) => {
     const transporter = nodemailer.createTransport({
