@@ -276,13 +276,15 @@ export const createBooking = async (req, res) => {
                 </div>
             `;
 
-            await sendEmail({
+            sendEmail({
                 email: guestInfo.email,
                 subject: `Booking Confirmed: Room ${room.roomNumber} - ${bookingId}`,
                 html: emailHtml,
+            }).catch(emailErr => {
+                console.error('Email failed to send:', emailErr);
             });
         } catch (emailErr) {
-            console.error('Email failed to send:', emailErr);
+            console.error('Email prep error:', emailErr);
         }
     } catch (error) {
         console.error('Create Booking Error:', error);
@@ -417,7 +419,10 @@ export const getDashboardStats = async (req, res) => {
             totalBookings,
             pendingBookings,
             completedBookings,
-            availableRooms,
+            totalRooms,
+            occupiedRooms,
+            reservedRooms,
+            freeRooms,
             bookingRevenue,
             eventRevenue,
             orderRevenue,
@@ -429,6 +434,9 @@ export const getDashboardStats = async (req, res) => {
             Booking.countDocuments({ status: 'pending', createdAt: { $gte: startOfToday, $lte: endOfToday } }),
             Booking.countDocuments({ status: 'checked_out', updatedAt: { $gte: startOfToday, $lte: endOfToday } }),
             Room.countDocuments({ status: { $ne: 'maintenance' } }),
+            Room.countDocuments({ status: 'occupied' }),
+            Room.countDocuments({ status: 'reserved' }),
+            Room.countDocuments({ status: 'available' }),
             Booking.aggregate([
                 { 
                     $match: { 
@@ -487,7 +495,10 @@ export const getDashboardStats = async (req, res) => {
             confirmedBookings: completedBookings,
             completedBookings,
             totalCustomers: totalCustomersToday,
-            availableRooms,
+            availableRooms: freeRooms,
+            totalRooms,
+            occupiedRooms,
+            reservedRooms,
             totalRevenue,
         });
     } catch (error) {
@@ -576,6 +587,9 @@ export const getMonthlyRevenue = async (req, res) => {
             return {
                 month: m,
                 revenue: (b?.revenue || 0) + (e?.revenue || 0) + (o?.revenue || 0),
+                roomRevenue: b?.revenue || 0,
+                eventRevenue: e?.revenue || 0,
+                orderRevenue: o?.revenue || 0,
                 count: (b?.count || 0) + (e?.count || 0),
             };
         });
@@ -659,13 +673,15 @@ export const confirmBookingPayment = async (req, res) => {
                 </div>
             `;
 
-            await sendEmail({
+            sendEmail({
                 email: booking.guestInfo.email,
                 subject: `Booking Confirmed: Room ${booking.room.roomNumber} - ${booking.bookingId}`,
                 html: emailHtml,
+            }).catch(emailErr => {
+                console.error('Email failed to send:', emailErr);
             });
         } catch (emailErr) {
-            console.error('Email failed to send:', emailErr);
+            console.error('Email prep error:', emailErr);
         }
 
         res.status(200).json({

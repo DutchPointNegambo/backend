@@ -269,10 +269,11 @@ export const confirmPayment = async (req, res) => {
                 `
             };
 
-            await sendEmail(emailOptions);
+            sendEmail(emailOptions).catch(emailError => {
+                console.error('Payment confirmation email failed to send:', emailError);
+            });
         } catch (emailError) {
-            console.error('Payment confirmation email failed to send:', emailError);
-            // We don't throw here so the user still sees a success message on the frontend
+            console.error('Payment confirmation email prep error:', emailError);
         }
 
         res.status(200).json({
