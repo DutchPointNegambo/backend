@@ -201,14 +201,15 @@ export const createEventBooking = async (req, res) => {
                 </div>
             `
 
-            await sendEmail({
+            sendEmail({
                 email: guestInfo.email,
                 subject: `Booking Confirmed: ${eventType.toUpperCase()} - ${bookingRef}`,
                 html: emailHtml,
+            }).catch(emailErr => {
+                console.error('Email failed to send:', emailErr)
             })
         } catch (emailErr) {
-            console.error('Email failed to send:', emailErr)
-
+            console.error('Email prep error:', emailErr)
         }
 
         return res.status(201).json(booking)
@@ -390,13 +391,15 @@ export const confirmEventBookingPayment = async (req, res) => {
                 </div>
             `;
 
-            await sendEmail({
+            sendEmail({
                 email: booking.guestInfo.email,
                 subject: `Event Booking Confirmed: ${booking.bookingRef}`,
                 html: emailHtml
+            }).catch(emailErr => {
+                console.error('Email failed to send:', emailErr);
             });
         } catch (emailErr) {
-            console.error('Email failed to send:', emailErr);
+            console.error('Email prep error:', emailErr);
         }
 
         res.status(200).json({
