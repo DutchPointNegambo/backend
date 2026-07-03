@@ -1,5 +1,5 @@
 import express from 'express';
-import { protect, admin } from '../middleware/auth.js';
+import { protect, admin, receptionistOrAdmin } from '../middleware/auth.js';
 
     // User management
 import { getUsers, getUserById, createUser, updateUser, deleteUser } from '../controllers/adminController.js';
@@ -55,7 +55,22 @@ import {
 const router = express.Router();
 
 
-router.use(protect, admin);
+router.use(protect);
+
+// Role restrictions by route prefix
+router.use('/users', admin);
+router.use('/staff', admin);
+router.use('/reports', admin);
+router.use('/packages', admin);
+router.use('/contacts', admin);
+router.use('/events', admin);
+router.use('/event-features', admin);
+
+router.use('/rooms', receptionistOrAdmin);
+router.use('/bookings', receptionistOrAdmin);
+router.use('/notifications', receptionistOrAdmin);
+router.use('/stats', receptionistOrAdmin);
+router.use('/revenue', receptionistOrAdmin);
 
 //Dashboard 
 router.get('/stats', getDashboardStats);
