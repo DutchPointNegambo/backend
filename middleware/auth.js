@@ -37,4 +37,12 @@ const admin = (req, res, next) => {
     }
 };
 
-export { protect, admin };
+const receptionistOrAdmin = (req, res, next) => {
+    if (req.user && (req.user.role === 'admin' || req.user.role === 'receptionist')) {
+        next();
+    } else {
+        res.status(401).json({ message: 'Not authorized, admin or receptionist role required' });
+    }
+};
+
+export { protect, admin, receptionistOrAdmin };

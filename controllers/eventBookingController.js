@@ -1,5 +1,14 @@
 import EventBooking from '../models/EventBooking.js'
 import sendEmail from '../utils/sendEmail.js'
+import crypto from 'crypto'
+
+// --- PayHere Hash Helper ---
+const generatePayHereHash = (merchantId, orderId, amount, currency, merchantSecret) => {
+    const hashedSecret = crypto.createHash('md5').update(merchantSecret).digest('hex').toUpperCase();
+    const amountFormatted = Number(amount).toFixed(2);
+    const mainString = merchantId + orderId + amountFormatted + currency + hashedSecret;
+    return crypto.createHash('md5').update(mainString).digest('hex').toUpperCase();
+};
 
 
 const toDateOnly = (dateStr) => {
@@ -71,44 +80,10 @@ export const createEventBooking = async (req, res) => {
         }
 
 
-        if (!cardDetails || !cardDetails.number || !cardDetails.expiry || !cardDetails.cvv || !cardDetails.name) {
-            return res.status(400).json({ message: 'All card details are required.' })
+        const paymentMethod = 'payhere'
+        const paymentDetails = {
+            note: 'Pending PayHere checkout'
         }
-
-        const cardNum = cardDetails.number.replace(/\s/g, '')
-        if (!/^\d{13,19}$/.test(cardNum)) {
-            return res.status(400).json({ message: 'Invalid card number.' })
-        }
-
-        // Luhn check
-        let sum = 0, alt = false
-        for (let i = cardNum.length - 1; i >= 0; i--) {
-            let n = parseInt(cardNum[i], 10)
-            if (alt) { n *= 2; if (n > 9) n -= 9 }
-            sum += n
-            alt = !alt
-        }
-        if (sum % 10 !== 0) {
-            return res.status(400).json({ message: 'Card number failed validation.' })
-        }
-
-        // Expiry check MM/YY
-        const expiryMatch = cardDetails.expiry.match(/^(0[1-9]|1[0-2])\/(\d{2})$/)
-        if (!expiryMatch) {
-            return res.status(400).json({ message: 'Card expiry must be MM/YY format.' })
-        }
-        const expMonth = parseInt(expiryMatch[1], 10)
-        const expYear = 2000 + parseInt(expiryMatch[2], 10)
-        const now = new Date()
-        if (expYear < now.getFullYear() || (expYear === now.getFullYear() && expMonth < (now.getMonth() + 1))) {
-            return res.status(400).json({ message: 'Card has expired.' })
-        }
-
-        // CVV
-        if (!/^\d{3,4}$/.test(cardDetails.cvv)) {
-            return res.status(400).json({ message: 'CVV must be 3 or 4 digits.' })
-        }
-
 
         const dateOnly = toDateOnly(eventDate)
         const nextDay = new Date(dateOnly.getTime() + 24 * 60 * 60 * 1000)
@@ -128,7 +103,6 @@ export const createEventBooking = async (req, res) => {
         //Calculate payment
         const pType = paymentType === 'deposit' ? 'deposit' : 'full'
         const paidAmount = pType === 'deposit' ? Math.round(totalAmount * 0.25) : totalAmount
-        const paymentStatus = pType === 'deposit' ? 'deposit_paid' : 'fully_paid'
 
         const bookingRef = `EVT${Date.now()}`
 
@@ -143,22 +117,46 @@ export const createEventBooking = async (req, res) => {
             decoration,
             foodPackage,
             totalAmount,
-            status: 'confirmed',
+            status: 'pending',
             paymentType: pType,
             paidAmount,
-            paymentStatus,
-            paymentMethod: 'card',
-            paymentDetails: {
-                cardLast4: cardNum.slice(-4),
-                cardBrand: detectCardBrand(cardNum),
-                transactionId: `TXN${Date.now()}`,
-            },
+            paymentStatus: 'pending',
+            paymentMethod,
+            paymentDetails,
             specialRequests: specialRequests || '',
             addons: addons || [],
         })
 
-
         await booking.populate('decoration foodPackage')
+
+        const merchantId = (process.env.PAYHERE_MERCHANT_ID || '1226209').trim();
+        const merchantSecret = (process.env.PAYHERE_MERCHANT_SECRET || '3262097392333620346221091696102295398843').trim();
+
+        const payhereParams = {
+            sandbox: process.env.PAYHERE_SANDBOX !== 'false',
+            merchant_id: merchantId,
+            return_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment-success`,
+            cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment-cancel`,
+            notify_url: `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/event-bookings/notify`,
+            order_id: booking._id.toString(),
+            items: `Event Booking - ${eventType.toUpperCase()} Package`,
+            amount: paidAmount.toFixed(2),
+            currency: 'LKR',
+            hash: generatePayHereHash(merchantId, booking._id.toString(), paidAmount, 'LKR', merchantSecret),
+            first_name: guestInfo.firstName,
+            last_name: guestInfo.lastName,
+            email: guestInfo.email,
+            phone: guestInfo.phone || '0771234567',
+            address: 'Negombo',
+            city: 'Negombo',
+            country: 'Sri Lanka'
+        };
+
+        return res.status(201).json({
+            success: true,
+            booking,
+            payhere: payhereParams
+        });
 
         //email
         try {
@@ -203,14 +201,15 @@ export const createEventBooking = async (req, res) => {
                 </div>
             `
 
-            await sendEmail({
+            sendEmail({
                 email: guestInfo.email,
                 subject: `Booking Confirmed: ${eventType.toUpperCase()} - ${bookingRef}`,
                 html: emailHtml,
+            }).catch(emailErr => {
+                console.error('Email failed to send:', emailErr)
             })
         } catch (emailErr) {
-            console.error('Email failed to send:', emailErr)
-
+            console.error('Email prep error:', emailErr)
         }
 
         return res.status(201).json(booking)
@@ -328,3 +327,88 @@ export const adminUpdateEventPayment = async (req, res) => {
         return res.status(500).json({ message: error.message })
     }
 }
+
+export const confirmEventBookingPayment = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { transactionId } = req.body;
+
+        const booking = await EventBooking.findById(id).populate('decoration foodPackage');
+        if (!booking) {
+            return res.status(404).json({ message: 'Event booking not found' });
+        }
+
+        booking.status = 'confirmed';
+        booking.paymentStatus = booking.paymentType === 'deposit' ? 'deposit_paid' : 'fully_paid';
+        booking.paymentDate = new Date();
+        booking.paymentDetails = {
+            transactionId: transactionId || `TXN-PAYHERE-${Date.now()}`,
+            method: 'payhere'
+        };
+
+        await booking.save();
+
+        // Send confirmation email
+        try {
+            const emailHtml = `
+                <div style="font-family: 'Inter', sans-serif; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">
+                    <div style="background: linear-gradient(135deg, #0f172a, #334155); padding: 40px 20px; text-align: center; color: #ffffff;">
+                        <h1 style="margin: 0; font-size: 28px; letter-spacing: -0.025em;">Booking Confirmed!</h1>
+                        <p style="margin: 10px 0 0; opacity: 0.8; font-size: 16px;">Reference: ${booking.bookingRef}</p>
+                    </div>
+                    <div style="padding: 32px 24px;">
+                        <p style="font-size: 16px; line-height: 1.6; margin-bottom: 24px;">Hi ${booking.guestInfo.firstName}, thank you for choosing Dutch Point Resort. Your event booking has been successfully received and confirmed via PayHere.</p>
+                        
+                        <div style="background-color: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                            <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">Event Summary</h3>
+                            <table style="width: 100%; font-size: 14px; border-collapse: collapse;">
+                                <tr><td style="padding: 6px 0; color: #64748b;">Type</td><td style="padding: 6px 0; font-weight: 600; text-align: right; text-transform: capitalize;">${booking.eventType}</td></tr>
+                                <tr><td style="padding: 6px 0; color: #64748b;">Date</td><td style="padding: 6px 0; font-weight: 600; text-align: right;">${new Date(booking.eventDate).toLocaleDateString()}</td></tr>
+                                <tr><td style="padding: 6px 0; color: #64748b;">Slot</td><td style="padding: 6px 0; font-weight: 600; text-align: right; text-transform: capitalize;">${booking.timeSlot}</td></tr>
+                                <tr><td style="padding: 6px 0; color: #64748b;">Guests</td><td style="padding: 6px 0; font-weight: 600; text-align: right;">${booking.guests}</td></tr>
+                                <tr><td style="padding: 6px 0; color: #64748b;">Decoration</td><td style="padding: 6px 0; font-weight: 600; text-align: right; text-transform: capitalize;">${booking.decoration?.name || 'Standard'}</td></tr>
+                                <tr><td style="padding: 6px 0; color: #64748b;">Food</td><td style="padding: 6px 0; font-weight: 600; text-align: right; text-transform: capitalize;">${booking.foodPackage?.name || 'Standard'}</td></tr>
+                            </table>
+                        </div>
+
+                        <div style="border-top: 1px solid #f1f5f9; padding-top: 20px;">
+                            <table style="width: 100%; font-size: 14px;">
+                                <tr><td style="padding: 4px 0;">Total Amount</td><td style="padding: 4px 0; font-weight: 600; text-align: right;">Rs. ${booking.totalAmount.toLocaleString()}</td></tr>
+                                <tr><td style="padding: 4px 0; color: #10b981;">Amount Paid (PayHere)</td><td style="padding: 4px 0; font-weight: 700; text-align: right; color: #10b981;">Rs. ${booking.paidAmount.toLocaleString()}</td></tr>
+                                ${booking.paymentType === 'deposit' ? `<tr><td style="padding: 4px 0; color: #f59e0b;">Balance Due</td><td style="padding: 4px 0; font-weight: 600; text-align: right; color: #f59e0b;">Rs. ${(booking.totalAmount - booking.paidAmount).toLocaleString()}</td></tr>` : ''}
+                            </table>
+                        </div>
+
+                        <div style="margin-top: 32px; text-align: center;">
+                            <p style="font-size: 14px; color: #64748b; margin-bottom: 20px;">We look forward to hosting your special day!</p>
+                            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/my-events" style="display: inline-block; background-color: #0f172a; color: #ffffff; padding: 14px 28px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 14px;">View My Booking</a>
+                        </div>
+                    </div>
+                    <div style="background-color: #f1f5f9; padding: 24px; text-align: center; font-size: 12px; color: #94a3b8;">
+                        <p style="margin: 0;">Dutch Point Resort, Negombo, Sri Lanka</p>
+                        <p style="margin: 4px 0 0;">This is an automated confirmation email.</p>
+                    </div>
+                </div>
+            `;
+
+            sendEmail({
+                email: booking.guestInfo.email,
+                subject: `Event Booking Confirmed: ${booking.bookingRef}`,
+                html: emailHtml
+            }).catch(emailErr => {
+                console.error('Email failed to send:', emailErr);
+            });
+        } catch (emailErr) {
+            console.error('Email prep error:', emailErr);
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Event booking payment confirmed successfully',
+            booking
+        });
+    } catch (error) {
+        console.error('Confirm Event Booking Payment Error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};

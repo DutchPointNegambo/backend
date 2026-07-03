@@ -6,6 +6,9 @@ dotenv.config();
 
 // 2. Force Node.js to use Google DNS to bypass local connection issues (e.g. SRV resolution)
 dns.setServers(['8.8.8.8', '8.8.4.4']);
+if (typeof dns.setDefaultResultOrder === 'function') {
+    dns.setDefaultResultOrder('ipv4first');
+}
 
 // 3. Import app and connectDB
 import app from './app.js';
