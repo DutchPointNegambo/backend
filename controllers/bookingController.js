@@ -56,7 +56,7 @@ export const createBooking = async (req, res) => {
         // 3. Check for overlapping bookings
         const overlappingBooking = await Booking.findOne({
             room: { $in: relatedIds },
-            status: { $in: ['reserved', 'checked_in', 'pending'] },
+            status: { $in: ['reserved', 'checked_in'] },
             $or: [
                 { checkIn: { $lte: endDate }, checkOut: { $gte: startDate } }
             ]
