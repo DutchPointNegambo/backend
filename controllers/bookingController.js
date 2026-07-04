@@ -7,6 +7,7 @@ import EventBooking from '../models/EventBooking.js';
 import crypto from 'crypto';
 import { createNotification } from './notificationController.js';
 import sendEmail from '../utils/sendEmail.js';
+import { getStartOfTodaySL, getEndOfTodaySL } from '../utils/timezone.js';
 
 // --- PayHere Hash Helper ---
 const generatePayHereHash = (merchantId, orderId, amount, currency, merchantSecret) => {
@@ -429,10 +430,8 @@ export const updateBookingStatus = async (req, res) => {
 
 export const getDashboardStats = async (req, res) => {
     try {
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
-        const endOfToday = new Date();
-        endOfToday.setHours(23, 59, 59, 999);
+        const startOfToday = getStartOfTodaySL();
+        const endOfToday = getEndOfTodaySL();
 
         const [
             totalBookings,
