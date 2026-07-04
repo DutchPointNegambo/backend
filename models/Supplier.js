@@ -25,7 +25,7 @@ const supplierSchema = new mongoose.Schema({
   category: {
     type: String,
     required: true,
-    enum: ['Food & Beverage', 'Housekeeping', 'Maintenance', 'Office Supplies', 'Other'],
+    enum: ['Food & Beverage', 'Housekeeping', 'Kitchen & Restaurant', 'Maintenance', 'Bar', 'Furniture & Equipment', 'Office Supplies', 'Other'],
   },
   status: {
     type: String,

@@ -114,6 +114,27 @@ export const createOrder = async (req, res) => {
                 orderId: savedOrder._id,
                 payhere: payhereParams
             });
+        } else if (paymentMethod === 'cash' || paymentMethod === 'manual') {
+            const newOrder = new Order({
+                guestInfo,
+                items,
+                subtotal,
+                serviceCharge,
+                total,
+                status: req.body.status || 'pending',
+                paymentStatus: req.body.paymentStatus || 'pending',
+                paymentDetails: {
+                    note: req.body.paymentNote || 'Manual order'
+                }
+            });
+
+            const savedOrder = await newOrder.save();
+
+            res.status(201).json({
+                success: true,
+                message: 'Order created successfully',
+                orderId: savedOrder._id
+            });
         }
     } catch (error) {
         console.error('Error creating order:', error);
@@ -127,6 +148,10 @@ export const createOrder = async (req, res) => {
 
 export const getOrders = async (req, res) => {
     try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 15;
+        const skip = (page - 1) * limit;
+
         const { status, search } = req.query;
         let query = {};
 
@@ -142,8 +167,20 @@ export const getOrders = async (req, res) => {
             ].filter(Boolean);
         }
 
-        const orders = await Order.find(query).sort({ createdAt: -1 });
-        res.status(200).json(orders);
+        const [orders, total] = await Promise.all([
+            Order.find(query)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit),
+            Order.countDocuments(query)
+        ]);
+
+        res.status(200).json({
+            orders,
+            total,
+            page,
+            pages: Math.ceil(total / limit)
+        });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -205,9 +242,13 @@ export const updateOrderStatus = async (req, res) => {
         const { id } = req.params;
         const { status, paymentStatus } = req.body;
 
+        const updateFields = {};
+        if (status !== undefined) updateFields.status = status;
+        if (paymentStatus !== undefined) updateFields.paymentStatus = paymentStatus;
+
         const updatedOrder = await Order.findByIdAndUpdate(
             id,
-            { status, paymentStatus },
+            { $set: updateFields },
             { new: true }
         );
 
