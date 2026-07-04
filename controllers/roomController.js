@@ -53,7 +53,7 @@ export const getRoomsByCategory = async (req, res) => {
 
       return {
         ...room.toObject(),
-        isAvailable: !isOccupied && room.status === 'available'
+        isAvailable: !isOccupied && room.status !== 'maintenance'
       };
     });
 
