@@ -56,7 +56,7 @@ export const createBooking = async (req, res) => {
         // 3. Check for overlapping bookings
         const overlappingBooking = await Booking.findOne({
             room: { $in: relatedIds },
-            status: { $in: ['reserved', 'checked_in', 'pending'] },
+            status: { $in: ['reserved', 'checked_in'] },
             $or: [
                 { checkIn: { $lte: endDate }, checkOut: { $gte: startDate } }
             ]
@@ -295,7 +295,7 @@ export const createBooking = async (req, res) => {
 
 export const getBookings = async (req, res) => {
     try {
-        const { status, page = 1, limit = 20, from, to, userId } = req.query;
+        const { status, page = 1, limit = 20, from, to, userId, search } = req.query;
         const query = {};
 
         if (status && status !== 'all') query.status = status;
@@ -304,6 +304,25 @@ export const getBookings = async (req, res) => {
             query.checkIn = {};
             if (from) query.checkIn.$gte = new Date(from);
             if (to) query.checkIn.$lte = new Date(to);
+        }
+
+        if (search) {
+            const matchingUsers = await User.find({
+                $or: [
+                    { firstName: { $regex: search, $options: 'i' } },
+                    { lastName: { $regex: search, $options: 'i' } },
+                    { email: { $regex: search, $options: 'i' } }
+                ]
+            }).select('_id');
+            const userIds = matchingUsers.map(u => u._id);
+
+            query.$or = [
+                { user: { $in: userIds } },
+                { bookingId: { $regex: search, $options: 'i' } },
+                { 'guestInfo.firstName': { $regex: search, $options: 'i' } },
+                { 'guestInfo.lastName': { $regex: search, $options: 'i' } },
+                { 'guestInfo.email': { $regex: search, $options: 'i' } }
+            ];
         }
 
         const total = await Booking.countDocuments(query);
