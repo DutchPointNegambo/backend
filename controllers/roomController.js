@@ -35,7 +35,7 @@ export const getRoomsByCategory = async (req, res) => {
 
     const bookings = await Booking.find({
       room: { $in: allRelatedIds },
-      status: { $in: ['reserved', 'checked_in', 'pending'] },
+      status: { $in: ['reserved', 'checked_in'] },
       $or: [
         { checkIn: { $lte: end }, checkOut: { $gte: start } }
       ]
@@ -91,7 +91,7 @@ export const checkRoomAvailability = async (req, res) => {
 
     const overlappingBooking = await Booking.findOne({
       room: { $in: relatedIds },
-      status: { $in: ['reserved', 'checked_in', 'pending'] },
+      status: { $in: ['reserved', 'checked_in'] },
       $or: [
         { checkIn: { $lte: end }, checkOut: { $gte: start } }
       ]
