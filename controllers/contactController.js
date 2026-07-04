@@ -32,8 +32,50 @@ export const createContact = async (req, res) => {
 
 export const getContacts = async (req, res) => {
     try {
-        const contacts = await Contact.find().sort({ createdAt: -1 });
-        res.json(contacts);
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const { status, search } = req.query;
+        let query = {};
+
+        if (status && status !== 'all') {
+            query.status = status;
+        }
+
+        if (search) {
+            query.$or = [
+                { name: { $regex: search, $options: 'i' } },
+                { email: { $regex: search, $options: 'i' } },
+                { subject: { $regex: search, $options: 'i' } },
+                { message: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        const [contacts, total, newCount, readCount, respondedCount, allCount] = await Promise.all([
+            Contact.find(query)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit),
+            Contact.countDocuments(query),
+            Contact.countDocuments({ status: 'new' }),
+            Contact.countDocuments({ status: 'read' }),
+            Contact.countDocuments({ status: 'responded' }),
+            Contact.countDocuments({})
+        ]);
+
+        res.json({
+            contacts,
+            total,
+            page,
+            pages: Math.ceil(total / limit),
+            counts: {
+                all: allCount,
+                new: newCount,
+                read: readCount,
+                responded: respondedCount
+            }
+        });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
