@@ -1,6 +1,8 @@
 import Staff from '../models/Staff.js';
 import User from '../models/User.js';
 
+const isValidEmergencyContact = (value) => /^(?:[A-Za-z][A-Za-z\s.'-]{1,}\s*-\s*)?0\d{9}$/.test((value || '').trim());
+
 
 export const getStaff = async (req, res) => {
     try {
@@ -79,9 +81,18 @@ export const getStaffById = async (req, res) => {
 export const createStaff = async (req, res) => {
     try {
         const email = req.body.email?.toLowerCase();
+        const emergencyContact = (req.body.emergencyContact || '').trim();
         const exists = await Staff.findOne({ email });
         if (exists) {
             return res.status(400).json({ message: 'Staff with this email already exists' });
+        }
+
+        if (!emergencyContact) {
+            return res.status(400).json({ message: 'Emergency contact is required' });
+        }
+
+        if (!isValidEmergencyContact(emergencyContact)) {
+            return res.status(400).json({ message: 'Emergency contact must be a 10-digit number or a name with number, e.g. John Doe - 0712345678' });
         }
 
         // Split name for User model
@@ -122,6 +133,7 @@ export const createStaff = async (req, res) => {
         const staff = await Staff.create({
             ...req.body,
             email,
+            emergencyContact,
             user: user._id
         });
 
@@ -136,6 +148,14 @@ export const updateStaff = async (req, res) => {
     try {
         const staff = await Staff.findById(req.params.id);
         if (!staff) return res.status(404).json({ message: 'Staff member not found' });
+
+        if (req.body.emergencyContact !== undefined) {
+            const emergencyContact = (req.body.emergencyContact || '').trim();
+            if (emergencyContact && !isValidEmergencyContact(emergencyContact)) {
+                return res.status(400).json({ message: 'Emergency contact must be a 10-digit number or a name with number, e.g. John Doe - 0712345678' });
+            }
+            req.body.emergencyContact = emergencyContact;
+        }
 
         // Update fields
         const fields = [
