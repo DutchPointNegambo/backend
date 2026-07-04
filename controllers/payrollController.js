@@ -57,6 +57,8 @@ const calculateSalary = (employee, attendanceRecords, settings, workingDays) => 
     const basicSalary = employee.salary || 0;
     const dailyRate = workingDays > 0 ? basicSalary / workingDays : 0;
     const hourlyRate = settings.standardHoursPerDay > 0 ? dailyRate / settings.standardHoursPerDay : 0;
+    const lateDeductionAfterCount = Math.max(0, Number(settings.lateDeductionAfterCount ?? 0));
+    const latePenaltyPercent = Number(settings.latePenaltyPercent ?? 0);
 
     const presentDays = attendanceRecords.filter(r => r.status === 'Present' || r.status === 'Late').length;
     const halfDays = attendanceRecords.filter(r => r.status === 'Half-Day').length;
@@ -81,7 +83,8 @@ const calculateSalary = (employee, attendanceRecords, settings, workingDays) => 
     const grossSalary = parseFloat((basePay + overtimePay + bonus + allowances).toFixed(2));
 
     // Deductions
-    const lateDeductions = parseFloat((lateDays * dailyRate * (settings.latePenaltyPercent / 100)).toFixed(2));
+    const deductibleLateDays = Math.max(0, lateDays - lateDeductionAfterCount);
+    const lateDeductions = parseFloat((deductibleLateDays * dailyRate * (latePenaltyPercent / 100)).toFixed(2));
     const absenceDeductions = parseFloat((Math.max(0, absentDays) * dailyRate * (settings.absencePenaltyPercent / 100)).toFixed(2));
     const totalDeductions = parseFloat((lateDeductions + absenceDeductions).toFixed(2));
 
@@ -93,6 +96,7 @@ const calculateSalary = (employee, attendanceRecords, settings, workingDays) => 
         presentDays,
         halfDays,
         lateDays,
+        deductibleLateDays,
         absentDays: Math.max(0, absentDays),
         totalWorkHours: parseFloat(totalWorkHours.toFixed(2)),
         overtimeHours: parseFloat(overtimeHours.toFixed(2)),
@@ -128,7 +132,7 @@ export const updatePayrollSettings = async (req, res) => {
     try {
         const allowed = [
             'overtimeMultiplier', 'standardHoursPerDay', 'latePenaltyPercent',
-            'absencePenaltyPercent', 'defaultBonus', 'defaultAllowances',
+            'lateGraceMinutes', 'lateDeductionAfterCount', 'absencePenaltyPercent', 'defaultBonus', 'defaultAllowances',
             'workingDaysPerWeek', 'overtimeThresholdHours',
         ];
         const update = {};
