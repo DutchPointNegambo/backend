@@ -1,5 +1,5 @@
 import express from 'express';
-import { protect, admin } from '../middleware/auth.js';
+import { protect, admin, receptionistOrAdmin } from '../middleware/auth.js';
 
     // User management
 import { getUsers, getUserById, createUser, updateUser, deleteUser } from '../controllers/adminController.js';
@@ -37,11 +37,40 @@ import {
 // Contact management
 import { getContacts, updateContactStatus, deleteContact } from '../controllers/contactController.js';
 
+// Event booking management
+import {
+    adminGetEventBookings,
+    adminUpdateEventStatus,
+    adminUpdateEventPayment,
+} from '../controllers/eventBookingController.js';
+
+// Event Feature management
+import {
+    adminGetEventFeatures,
+    createEventFeature,
+    updateEventFeature,
+    deleteEventFeature,
+} from '../controllers/eventFeatureController.js';
 
 const router = express.Router();
 
 
-router.use(protect, admin);
+router.use(protect);
+
+// Role restrictions by route prefix
+router.use('/users', admin);
+router.use('/staff', admin);
+router.use('/reports', admin);
+router.use('/packages', admin);
+router.use('/contacts', admin);
+router.use('/events', admin);
+router.use('/event-features', admin);
+
+router.use('/rooms', receptionistOrAdmin);
+router.use('/bookings', receptionistOrAdmin);
+router.use('/notifications', receptionistOrAdmin);
+router.use('/stats', receptionistOrAdmin);
+router.use('/revenue', receptionistOrAdmin);
 
 //Dashboard 
 router.get('/stats', getDashboardStats);
@@ -98,6 +127,17 @@ router.delete('/packages/:id', deletePackage);
 router.get('/contacts', getContacts);
 router.put('/contacts/:id/status', updateContactStatus);
 router.delete('/contacts/:id', deleteContact);
+
+//Event Bookings
+router.get('/events', adminGetEventBookings);
+router.put('/events/:id/status', adminUpdateEventStatus);
+router.put('/events/:id/payment', adminUpdateEventPayment);
+
+//Event Features (Packages)
+router.get('/event-features', adminGetEventFeatures);
+router.post('/event-features', createEventFeature);
+router.put('/event-features/:id', updateEventFeature);
+router.delete('/event-features/:id', deleteEventFeature);
 
 
 export default router;

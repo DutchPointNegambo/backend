@@ -1,6 +1,11 @@
 import Booking from '../models/Booking.js';
 import Room from '../models/Room.js';
-import Staff from '../models/Staff.js';
+import Employee from '../models/Employee.js';
+import Order from '../models/Order.js';
+import EventBooking from '../models/EventBooking.js';
+import StockLog from '../models/StockLog.js';
+import Attendance from '../models/Attendance.js';
+import Payroll from '../models/Payroll.js';
 
 
 export const getReportSummary = async (req, res) => {
@@ -9,18 +14,75 @@ export const getReportSummary = async (req, res) => {
         const dateFilter = {};
         if (from || to) {
             dateFilter.createdAt = {};
-            if (from) dateFilter.createdAt.$gte = new Date(from);
-            if (to) dateFilter.createdAt.$lte = new Date(to);
+            if (from) dateFilter.createdAt.$gte = new Date(`${from}T00:00:00.000+05:30`);
+            if (to) {
+                dateFilter.createdAt.$lte = new Date(`${to}T23:59:59.999+05:30`);
+            }
         }
 
-        const [revenueResult, salaryResult, bookingsByStatus, roomsByStatus] = await Promise.all([
+        const [
+            revenueResult, 
+            foodRevenueResult,
+            eventRevenueResult,
+            payrollResult, 
+            inventoryExpenseResult,
+            bookingsByStatus, 
+            roomsByStatus
+        ] = await Promise.all([
+          
             Booking.aggregate([
-                { $match: { status: { $in: ['confirmed', 'completed'] }, ...dateFilter } },
+                { $match: { status: { $in: ['reserved', 'checked_in', 'checked_out'] }, ...dateFilter } },
                 { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } },
             ]),
-            Staff.aggregate([
-                { $match: { status: 'Active' } },
-                { $group: { _id: null, total: { $sum: '$salary' } } },
+            
+            Order.aggregate([
+                { $match: { status: { $in: ['paid', 'preparing', 'delivered'] }, ...dateFilter } },
+                { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } },
+            ]),
+            
+            EventBooking.aggregate([
+                { $match: { status: { $in: ['confirmed', 'completed'] }, ...dateFilter } },
+                { $group: { _id: null, total: { $sum: '$totalAmount' }, count: { $sum: 1 } } },
+            ]),
+         
+            Payroll.aggregate([
+                {
+                    $match: {
+                        status: 'Paid',
+                        paidAt: dateFilter.createdAt ? {
+                            $gte: dateFilter.createdAt.$gte,
+                            $lte: dateFilter.createdAt.$lte
+                        } : {
+                            $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+                            $lte: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999),
+                        }
+                    }
+                },
+                { $group: { _id: null, total: { $sum: '$netPay' } } }
+            ]),
+          
+            StockLog.aggregate([
+                { $match: { changeType: { $in: ['IN', 'OUT'] }, ...dateFilter } },
+                {
+                    $lookup: {
+                        from: 'inventories',
+                        localField: 'item',
+                        foreignField: '_id',
+                        as: 'itemData'
+                    }
+                },
+                {
+                    $addFields: {
+                        effectiveUnitCost: {
+                            $cond: {
+                                if: { $gt: [{ $ifNull: ['$unitCost', 0] }, 0] },
+                                then: '$unitCost',
+                                else: { $ifNull: [{ $arrayElemAt: ['$itemData.price', 0] }, 0] }
+                            }
+                        }
+                    }
+                },
+                { $group: { _id: null, total: { $sum: { $multiply: [{ $ifNull: ['$quantity', 0] }, '$effectiveUnitCost'] } } } },
             ]),
             Booking.aggregate([
                 { $match: dateFilter },
@@ -28,12 +90,20 @@ export const getReportSummary = async (req, res) => {
             ]),
             Room.aggregate([
                 { $group: { _id: '$status', count: { $sum: 1 } } },
-            ]),
+            ])
         ]);
 
-        const totalRevenue = revenueResult[0]?.total || 0;
-        const monthlyExpenses = salaryResult[0]?.total || 0;
-        const netProfit = totalRevenue - monthlyExpenses;
+        const roomRevenue = revenueResult[0]?.total || 0;
+        const foodRevenue = foodRevenueResult[0]?.total || 0;
+        const eventRevenue = eventRevenueResult[0]?.total || 0;
+        const totalRevenue = roomRevenue + foodRevenue + eventRevenue;
+        
+        const actualPayroll = payrollResult[0]?.total || 0;
+
+        const inventoryExpenses = inventoryExpenseResult[0]?.total || 0;
+        const operationalExpenses = actualPayroll + inventoryExpenses;
+        
+        const netProfit = totalRevenue - operationalExpenses;
 
         const totalRooms = roomsByStatus.reduce((s, r) => s + r.count, 0);
         const occupiedRooms = roomsByStatus.find((r) => r._id === 'occupied')?.count || 0;
@@ -41,9 +111,15 @@ export const getReportSummary = async (req, res) => {
 
         res.json({
             totalRevenue,
-            monthlyExpenses,
+            roomRevenue,
+            foodRevenue,
+            eventRevenue,
+            operationalExpenses,
+            monthlySalaries: actualPayroll,
+            inventoryExpenses,
             netProfit,
-            bookingCount: revenueResult[0]?.count || 0,
+            bookingCount: (revenueResult[0]?.count || 0) + (eventRevenueResult[0]?.count || 0),
+            foodOrderCount: foodRevenueResult[0]?.count || 0,
             occupancyRate,
             bookingsByStatus,
             roomsByStatus,
@@ -58,29 +134,107 @@ export const getMonthlyRevenue = async (req, res) => {
     try {
         const year = parseInt(req.query.year) || new Date().getFullYear();
 
-        const revenue = await Booking.aggregate([
-            {
-                $match: {
-                    status: { $in: ['confirmed', 'completed'] },
-                    createdAt: {
-                        $gte: new Date(`${year}-01-01`),
-                        $lte: new Date(`${year}-12-31`),
+        const [roomRevenue, foodRevenue, eventRevenue, payrollStats, inventoryStats] = await Promise.all([
+            Booking.aggregate([
+                {
+                    $match: {
+                        status: { $in: ['reserved', 'checked_in', 'checked_out'] },
+                        createdAt: {
+                            $gte: new Date(`${year}-01-01T00:00:00.000Z`),
+                            $lte: new Date(`${year}-12-31T23:59:59.999Z`),
+                        },
                     },
                 },
-            },
-            {
-                $group: {
-                    _id: { $month: '$createdAt' },
-                    revenue: { $sum: '$total' },
-                    count: { $sum: 1 },
+                { $group: { _id: { $month: { date: '$createdAt', timezone: '+05:30' } }, revenue: { $sum: '$total' }, count: { $sum: 1 } } },
+            ]),
+            Order.aggregate([
+                {
+                    $match: {
+                        status: { $in: ['paid', 'preparing', 'delivered'] },
+                        createdAt: {
+                            $gte: new Date(`${year}-01-01T00:00:00.000Z`),
+                            $lte: new Date(`${year}-12-31T23:59:59.999Z`),
+                        },
+                    },
                 },
-            },
-            { $sort: { _id: 1 } },
+                { $group: { _id: { $month: { date: '$createdAt', timezone: '+05:30' } }, revenue: { $sum: '$total' }, count: { $sum: 1 } } },
+            ]),
+            EventBooking.aggregate([
+                {
+                    $match: {
+                        status: { $in: ['confirmed', 'completed'] },
+                        createdAt: {
+                            $gte: new Date(`${year}-01-01T00:00:00.000Z`),
+                            $lte: new Date(`${year}-12-31T23:59:59.999Z`),
+                        },
+                    },
+                },
+                { $group: { _id: { $month: { date: '$createdAt', timezone: '+05:30' } }, revenue: { $sum: '$totalAmount' }, count: { $sum: 1 } } },
+            ]),
+            Payroll.aggregate([
+                {
+                    $match: {
+                        status: 'Paid',
+                        paidAt: {
+                            $gte: new Date(`${year}-01-01T00:00:00.000Z`),
+                            $lte: new Date(`${year}-12-31T23:59:59.999Z`),
+                        },
+                    },
+                },
+                { $group: { _id: { $month: { date: '$paidAt', timezone: '+05:30' } }, total: { $sum: '$netPay' } } },
+            ]),
+            StockLog.aggregate([
+                {
+                    $match: {
+                        changeType: { $in: ['IN', 'OUT'] },
+                        createdAt: {
+                            $gte: new Date(`${year}-01-01T00:00:00.000Z`),
+                            $lte: new Date(`${year}-12-31T23:59:59.999Z`),
+                        },
+                    },
+                },
+                {
+                    $lookup: {
+                        from: 'inventories',
+                        localField: 'item',
+                        foreignField: '_id',
+                        as: 'itemData'
+                    }
+                },
+                {
+                    $addFields: {
+                        effectiveUnitCost: {
+                            $cond: {
+                                if: { $gt: [{ $ifNull: ['$unitCost', 0] }, 0] },
+                                then: '$unitCost',
+                                else: { $ifNull: [{ $arrayElemAt: ['$itemData.price', 0] }, 0] }
+                            }
+                        }
+                    }
+                },
+                { $group: { _id: { $month: { date: '$createdAt', timezone: '+05:30' } }, total: { $sum: { $multiply: [{ $ifNull: ['$quantity', 0] }, '$effectiveUnitCost'] } } } },
+            ]),
         ]);
 
         const monthlyData = Array.from({ length: 12 }, (_, i) => {
-            const found = revenue.find((r) => r._id === i + 1);
-            return { month: i + 1, revenue: found?.revenue || 0, count: found?.count || 0 };
+            const month = i + 1;
+            const r = roomRevenue.find(x => x._id === month)?.revenue || 0;
+            const f = foodRevenue.find(x => x._id === month)?.revenue || 0;
+            const e = eventRevenue.find(x => x._id === month)?.revenue || 0;
+            
+            const pay = payrollStats.find(x => x._id === month)?.total || 0;
+            const inv = inventoryStats.find(x => x._id === month)?.total || 0;
+            
+            const rev = r + f + e;
+            const exp = pay + inv;
+            const netProfit = rev - exp;
+
+            return { 
+                month, 
+                revenue: rev, 
+                expenses: exp,
+                netProfit: netProfit
+            };
         });
 
         res.json(monthlyData);
@@ -95,16 +249,60 @@ export const getBookingReport = async (req, res) => {
         const dateFilter = {};
         if (from || to) {
             dateFilter.createdAt = {};
-            if (from) dateFilter.createdAt.$gte = new Date(from);
-            if (to) dateFilter.createdAt.$lte = new Date(to);
+            if (from) dateFilter.createdAt.$gte = new Date(`${from}T00:00:00.000+05:30`);
+            if (to) {
+                dateFilter.createdAt.$lte = new Date(`${to}T23:59:59.999+05:30`);
+            }
         }
 
-        const bookings = await Booking.find(dateFilter)
-            .populate('user', 'firstName lastName email phone')
-            .populate('room', 'name type roomNumber')
-            .sort({ createdAt: -1 });
+        const [bookings, events, orders] = await Promise.all([
+            Booking.find(dateFilter)
+                .populate('room', 'roomNumber type')
+                .populate('user', 'firstName lastName email')
+                .lean(),
+            EventBooking.find(dateFilter)
+                .populate('user', 'firstName lastName email')
+                .lean(),
+            Order.find(dateFilter)
+                .lean()
+        ]);
 
-        res.json(bookings);
+        const bookingRows = bookings.map(b => ({
+            date: b.createdAt,
+            type: 'Room Booking',
+            ref: b.bookingId,
+            customerName: b.guestInfo ? `${b.guestInfo.firstName} ${b.guestInfo.lastName}`.trim() : (b.user ? `${b.user.firstName} ${b.user.lastName}`.trim() : 'Guest'),
+            email: b.guestInfo?.email || b.user?.email || '',
+            details: b.room ? `Room ${b.room.roomNumber} (${b.room.type})` : 'Room Booking',
+            status: b.status,
+            amount: b.total
+        }));
+
+        const eventRows = events.map(e => ({
+            date: e.createdAt,
+            type: 'Event Booking',
+            ref: e.bookingRef,
+            customerName: e.guestInfo ? `${e.guestInfo.firstName} ${e.guestInfo.lastName}`.trim() : (e.user ? `${e.user.firstName} ${e.user.lastName}`.trim() : 'Guest'),
+            email: e.guestInfo?.email || e.user?.email || '',
+            details: `${e.eventType} - ${e.guests} guests`,
+            status: e.status,
+            amount: e.paidAmount
+        }));
+
+        const orderRows = orders.map(o => ({
+            date: o.createdAt,
+            type: 'Food Order',
+            ref: o._id.toString().substring(18).toUpperCase(),
+            customerName: o.guestInfo?.name || 'Guest',
+            email: o.guestInfo?.email || '',
+            details: o.items ? o.items.map(i => `${i.name} x${i.quantity}`).join(', ') : 'Food Order',
+            status: o.status,
+            amount: o.total
+        }));
+
+        const combined = [...bookingRows, ...eventRows, ...orderRows].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        res.json(combined);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }

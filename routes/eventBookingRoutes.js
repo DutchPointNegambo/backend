@@ -1,14 +1,17 @@
 import express from 'express'
-//need to add auth middleware to protect routes and get user info for bookings
+import { protect } from '../middleware/auth.js'
 import {
     checkAvailability,
     createEventBooking,
-    getEventBookings,
+    getMyEventBookings,
+    confirmEventBookingPayment,
 } from '../controllers/eventBookingController.js'
 
 const router = express.Router()
+
 router.get('/check-availability', checkAvailability)
-router.get('/',getEventBookings)
-router.post('/',createEventBooking)
+router.post('/', protect, createEventBooking)
+router.get('/my-bookings', protect, getMyEventBookings)
+router.post('/:id/confirm-payment', protect, confirmEventBookingPayment)
 
 export default router
