@@ -18,6 +18,17 @@ export const getSuppliers = async (req, res) => {
 export const createSupplier = async (req, res) => {
   try {
     const { name, contactPerson, phone, email, address, category } = req.body;
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (email && !emailRegex.test(email)) {
+      return res.status(400).json({ message: 'Please enter a valid email address' });
+    }
+
+    // Phone validation (exactly 10 digits only)
+    if (!phone || !/^\d{10}$/.test(phone)) {
+      return res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
+    }
     
     const supplier = await Supplier.create({
       name,
@@ -42,6 +53,18 @@ export const updateSupplier = async (req, res) => {
     const supplier = await Supplier.findById(req.params.id);
 
     if (supplier) {
+      if (req.body.email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(req.body.email)) {
+          return res.status(400).json({ message: 'Please enter a valid email address' });
+        }
+      }
+
+      if (req.body.phone) {
+        if (!/^\d{10}$/.test(req.body.phone)) {
+          return res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
+        }
+      }
       supplier.name = req.body.name || supplier.name;
       supplier.contactPerson = req.body.contactPerson || supplier.contactPerson;
       supplier.phone = req.body.phone || supplier.phone;

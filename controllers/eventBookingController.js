@@ -1,6 +1,7 @@
 import EventBooking from '../models/EventBooking.js'
 import sendEmail from '../utils/sendEmail.js'
 import crypto from 'crypto'
+import User from '../models/User.js'
 
 // --- PayHere Hash Helper ---
 const generatePayHereHash = (merchantId, orderId, amount, currency, merchantSecret) => {
@@ -253,6 +254,26 @@ export const adminGetEventBookings = async (req, res) => {
         }
         if (req.query.paymentStatus && req.query.paymentStatus !== 'all') {
             filter.paymentStatus = req.query.paymentStatus
+        }
+
+        if (req.query.search) {
+            const search = req.query.search.trim()
+            const matchingUsers = await User.find({
+                $or: [
+                    { firstName: { $regex: search, $options: 'i' } },
+                    { lastName: { $regex: search, $options: 'i' } },
+                    { email: { $regex: search, $options: 'i' } }
+                ]
+            }).select('_id')
+            const userIds = matchingUsers.map(u => u._id)
+
+            filter.$or = [
+                { user: { $in: userIds } },
+                { bookingRef: { $regex: search, $options: 'i' } },
+                { 'guestInfo.firstName': { $regex: search, $options: 'i' } },
+                { 'guestInfo.lastName': { $regex: search, $options: 'i' } },
+                { 'guestInfo.email': { $regex: search, $options: 'i' } }
+            ]
         }
 
         const [bookings, total] = await Promise.all([
