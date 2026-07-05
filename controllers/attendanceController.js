@@ -2,15 +2,9 @@ import Attendance from '../models/Attendance.js';
 import Employee from '../models/Employee.js';
 import PayrollSettings from '../models/PayrollSettings.js';
 import { verifyToken } from '../utils/otpToken.js';
+import { getStartOfTodaySL, getEndOfTodaySL } from '../utils/timezone.js';
 
-const LATE_THRESHOLD_HOUR = 8; // 8:00 AM
-
-// Helper: get start of day
-const startOfDay = (date = new Date()) => {
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    return d;
-};
+const LATE_THRESHOLD_HOUR = 8; // 8:00 AM Sri Lanka time
 
 // POST /api/admin/attendance/scan — QR scan check-in/check-out (OTP verified)
 export const scanAttendance = async (req, res) => {
@@ -39,7 +33,7 @@ export const scanAttendance = async (req, res) => {
             return res.status(400).json({ message: `Employee ${employee.name} is ${employee.status}` });
         }
 
-        const today = startOfDay();
+        const today = getStartOfTodaySL();
         const now = new Date();
         const settings = (await PayrollSettings.findOne()) || (await PayrollSettings.create({}));
         const graceMinutes = Number(settings.lateGraceMinutes ?? 5);
@@ -49,8 +43,8 @@ export const scanAttendance = async (req, res) => {
 
         if (!attendance) {
             // First scan — CHECK IN
-            const scheduledStart = new Date(today);
-            scheduledStart.setHours(LATE_THRESHOLD_HOUR, 0, 0, 0);
+            // Build 8:00 AM threshold in Sri Lanka time (+05:30) so it is timezone-safe on Render
+            const scheduledStart = new Date(`${today.toISOString().split('T')[0]}T0${LATE_THRESHOLD_HOUR}:00:00.000+05:30`);
             const lateThreshold = new Date(scheduledStart.getTime() + graceMinutes * 60 * 1000);
             const isLate = now >= lateThreshold;
             attendance = await Attendance.create({
@@ -106,14 +100,14 @@ export const getAttendance = async (req, res) => {
         const filter = {};
 
         if (date) {
-            filter.date = startOfDay(new Date(date));
+            filter.date = getStartOfTodaySL(new Date(date));
         }
         if (employeeId) filter.employeeId = employeeId;
         if (status) filter.status = status;
         if (from || to) {
             filter.date = {};
-            if (from) filter.date.$gte = startOfDay(new Date(from));
-            if (to) filter.date.$lte = startOfDay(new Date(to));
+            if (from) filter.date.$gte = getStartOfTodaySL(new Date(from));
+            if (to) filter.date.$lte = getEndOfTodaySL(new Date(to));
         }
 
         const records = await Attendance.find(filter)
@@ -129,7 +123,7 @@ export const getAttendance = async (req, res) => {
 // GET /api/admin/attendance/today — Today's attendance summary
 export const getTodayAttendance = async (req, res) => {
     try {
-        const today = startOfDay();
+        const today = getStartOfTodaySL();
         const totalEmployees = await Employee.countDocuments({ status: 'Active' });
         const records = await Attendance.find({ date: today })
             .populate('employee', 'name email department jobTitle employeeId');
@@ -160,8 +154,8 @@ export const getAttendanceReport = async (req, res) => {
 
         if (from || to) {
             filter.date = {};
-            if (from) filter.date.$gte = startOfDay(new Date(from));
-            if (to) filter.date.$lte = startOfDay(new Date(to));
+            if (from) filter.date.$gte = getStartOfTodaySL(new Date(from));
+            if (to) filter.date.$lte = getEndOfTodaySL(new Date(to));
         }
         if (employeeId) filter.employeeId = employeeId;
 
