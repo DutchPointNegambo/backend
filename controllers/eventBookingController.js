@@ -41,7 +41,7 @@ export const checkAvailability = async (req, res) => {
         const existing = await EventBooking.findOne({
             eventDate: { $gte: eventDate, $lt: nextDay },
             timeSlot: slot,
-            status: { $ne: 'cancelled' },
+            status: { $in: ['confirmed', 'completed'] },
         })
 
         return res.json({ available: !existing })
@@ -433,3 +433,57 @@ export const confirmEventBookingPayment = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+// Cancel a booking (used by admin and cron)
+export const cancelEventBooking = async (req, res) => {
+    try {
+        const booking = await EventBooking.findById(req.params.id)
+        if (!booking) return res.status(404).json({ message: 'Event booking not found.' })
+        // Prevent cancelling confirmed or completed bookings
+        if (['confirmed', 'completed'].includes(booking.status)) {
+            return res.status(400).json({ message: 'Cannot cancel a confirmed booking.' })
+        }
+        booking.status = 'cancelled'
+        booking.paymentStatus = 'cancelled'
+        await booking.save()
+        return res.json({ success: true, booking })
+    } catch (error) {
+        return res.status(500).json({ message: error.message })
+    }
+}
+
+// Return PayHere checkout parameters for a pending booking
+export const getPayHereParams = async (req, res) => {
+    try {
+        const { id } = req.params
+        const booking = await EventBooking.findById(id)
+        if (!booking) return res.status(404).json({ message: 'Event booking not found' })
+        if (booking.status !== 'pending' || booking.paymentStatus !== 'pending') {
+            return res.status(400).json({ message: 'Booking is not pending payment' })
+        }
+        const merchantId = (process.env.PAYHERE_MERCHANT_ID || '1226209').trim()
+        const merchantSecret = (process.env.PAYHERE_MERCHANT_SECRET || '3262097392333620346221091696102295398843').trim()
+        const payhereParams = {
+            sandbox: process.env.PAYHERE_SANDBOX !== 'false',
+            merchant_id: merchantId,
+            return_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment-success`,
+            cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment-cancel`,
+            notify_url: `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/event-bookings/notify`,
+            order_id: booking._id.toString(),
+            items: `Event Booking - ${booking.eventType.toUpperCase()} Package`,
+            amount: booking.paidAmount.toFixed(2),
+            currency: 'LKR',
+            hash: generatePayHereHash(merchantId, booking._id.toString(), booking.paidAmount, 'LKR', merchantSecret),
+            first_name: booking.guestInfo.firstName,
+            last_name: booking.guestInfo.lastName,
+            email: booking.guestInfo.email,
+            phone: booking.guestInfo.phone || '0771234567',
+            address: 'Negombo',
+            city: 'Negombo',
+            country: 'Sri Lanka'
+        }
+        return res.json({ payhere: payhereParams })
+    } catch (error) {
+        return res.status(500).json({ message: error.message })
+    }
+}
