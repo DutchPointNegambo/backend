@@ -3,7 +3,7 @@ import Employee from '../models/Employee.js';
 import PayrollSettings from '../models/PayrollSettings.js';
 import { verifyToken } from '../utils/otpToken.js';
 
-const LATE_THRESHOLD_HOUR = 9; // 9:00 AM
+const LATE_THRESHOLD_HOUR = 8; // 8:00 AM
 
 // Helper: get start of day
 const startOfDay = (date = new Date()) => {
@@ -52,7 +52,7 @@ export const scanAttendance = async (req, res) => {
             const scheduledStart = new Date(today);
             scheduledStart.setHours(LATE_THRESHOLD_HOUR, 0, 0, 0);
             const lateThreshold = new Date(scheduledStart.getTime() + graceMinutes * 60 * 1000);
-            const isLate = now > lateThreshold;
+            const isLate = now >= lateThreshold;
             attendance = await Attendance.create({
                 employee: employee._id,
                 employeeId: employee.employeeId,
