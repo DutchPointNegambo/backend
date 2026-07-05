@@ -25,6 +25,11 @@ const notificationSchema = new mongoose.Schema({
     metadata: {
         type: mongoose.Schema.Types.Mixed,
         default: {}
+    },
+    targetRole: {
+        type: String,
+        enum: ['all', 'admin', 'receptionist'],
+        default: 'all'
     }
 }, { timestamps: true });
 
