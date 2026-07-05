@@ -1,6 +1,22 @@
 import Order from '../models/Order.js';
 import sendEmail from '../utils/sendEmail.js';
 import crypto from 'crypto';
+import { createNotification } from './notificationController.js';
+
+const notifyOrderCreated = async (order) => {
+    try {
+        await createNotification({
+            type: 'SYSTEM',
+            title: 'New Food Order',
+            message: `New food order #${order._id.toString().slice(-6).toUpperCase()} placed by ${order.guestInfo.name} (Rs. ${order.total.toLocaleString()})`,
+            link: '/receptionist/orders',
+            targetRole: 'receptionist',
+            metadata: { orderId: order._id }
+        });
+    } catch (e) {
+        console.warn('Failed to notify receptionist for new food order:', e.message);
+    }
+};
 
 // --- PayHere Hash Helper ---
 const generatePayHereHash = (merchantId, orderId, amount, currency, merchantSecret) => {
@@ -63,6 +79,7 @@ export const createOrder = async (req, res) => {
             });
 
             const savedOrder = await newOrder.save();
+            await notifyOrderCreated(savedOrder);
 
             res.status(201).json({
                 success: true,
@@ -84,6 +101,7 @@ export const createOrder = async (req, res) => {
             });
 
             const savedOrder = await newOrder.save();
+            await notifyOrderCreated(savedOrder);
 
             const merchantId = (process.env.PAYHERE_MERCHANT_ID || '1226209').trim();
             const merchantSecret = (process.env.PAYHERE_MERCHANT_SECRET || '3262097392333620346221091696102295398843').trim();
@@ -129,6 +147,7 @@ export const createOrder = async (req, res) => {
             });
 
             const savedOrder = await newOrder.save();
+            await notifyOrderCreated(savedOrder);
 
             res.status(201).json({
                 success: true,
@@ -163,6 +182,7 @@ export const getOrders = async (req, res) => {
             query.$or = [
                 { 'guestInfo.name': { $regex: search, $options: 'i' } },
                 { 'guestInfo.email': { $regex: search, $options: 'i' } },
+                { 'guestInfo.phone': { $regex: search, $options: 'i' } },
                 { '_id': search.match(/^[0-9a-fA-F]{24}$/) ? search : undefined }
             ].filter(Boolean);
         }

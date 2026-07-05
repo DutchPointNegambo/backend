@@ -1,9 +1,9 @@
 import Notification from '../models/Notification.js';
 
 // Helper to create a notification (used by other controllers)
-export const createNotification = async ({ type, title, message, link, metadata }) => {
+export const createNotification = async ({ type, title, message, link, metadata, targetRole = 'all' }) => {
     try {
-        await Notification.create({ type, title, message, link, metadata });
+        await Notification.create({ type, title, message, link, metadata, targetRole });
     } catch (e) {
         console.warn('Notification creation failed:', e.message);
     }
@@ -12,16 +12,24 @@ export const createNotification = async ({ type, title, message, link, metadata 
 // GET /admin/notifications
 export const getNotifications = async (req, res) => {
     try {
+        const role = req.user?.role || 'admin';
+        const filter = {
+            $or: [
+                { targetRole: { $exists: false } },
+                { targetRole: 'all' },
+                { targetRole: role }
+            ]
+        };
+
         const { limit = 30, unreadOnly } = req.query;
 
-        const filter = {};
         if (unreadOnly === 'true') filter.read = false;
 
         const notifications = await Notification.find(filter)
             .sort({ createdAt: -1 })
             .limit(Number(limit));
 
-        const unreadCount = await Notification.countDocuments({ read: false });
+        const unreadCount = await Notification.countDocuments({ ...filter, read: false });
 
         res.json({ notifications, unreadCount });
     } catch (error) {

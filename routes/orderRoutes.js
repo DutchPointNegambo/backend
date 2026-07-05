@@ -1,6 +1,6 @@
 import express from 'express';
 import { createOrder, getOrders, updateOrderStatus, confirmPayment, getOrderReport } from '../controllers/orderController.js';
-import { protect, admin } from '../middleware/auth.js';
+import { protect, admin, receptionistOrAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -8,9 +8,9 @@ const router = express.Router();
 router.post('/', createOrder);
 router.post('/:id/confirm-payment', confirmPayment);
 
-// Protected Admin routes
-router.get('/', protect, admin, getOrders);
+// Protected routes
+router.get('/', protect, receptionistOrAdmin, getOrders);
 router.get('/report', protect, admin, getOrderReport);
-router.put('/:id', protect, admin, updateOrderStatus);
+router.put('/:id', protect, receptionistOrAdmin, updateOrderStatus);
 
 export default router;
