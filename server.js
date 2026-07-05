@@ -13,6 +13,7 @@ if (typeof dns.setDefaultResultOrder === 'function') {
 // 3. Import app and connectDB
 import app from './app.js';
 import connectDB from './config/database.js';
+import './cron/expirePending.js';
 
 const PORT = process.env.PORT || 5000;
 
