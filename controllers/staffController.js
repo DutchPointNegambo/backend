@@ -2,6 +2,16 @@ import Staff from '../models/Staff.js';
 import User from '../models/User.js';
 
 const isValidEmergencyContact = (value) => /^(?:[A-Za-z][A-Za-z\s.'-]{1,}\s*-\s*)?0\d{9}$/.test((value || '').trim());
+const isDuplicateKeyError = (error) => error?.code === 11000;
+const getDuplicateMessage = (error) => {
+    if (error?.keyPattern?.nic || error?.keyValue?.nic) {
+        return 'NIC already exists';
+    }
+    if (error?.keyPattern?.email || error?.keyValue?.email) {
+        return 'Email already exists';
+    }
+    return 'Employee already exists';
+};
 
 
 export const getStaff = async (req, res) => {
@@ -139,6 +149,9 @@ export const createStaff = async (req, res) => {
 
         res.status(201).json(staff);
     } catch (error) {
+        if (isDuplicateKeyError(error)) {
+            return res.status(400).json({ message: getDuplicateMessage(error) });
+        }
         res.status(400).json({ message: error.message });
     }
 };
@@ -207,6 +220,9 @@ export const updateStaff = async (req, res) => {
         const updatedStaff = await staff.save();
         res.json(updatedStaff);
     } catch (error) {
+        if (isDuplicateKeyError(error)) {
+            return res.status(400).json({ message: getDuplicateMessage(error) });
+        }
         res.status(400).json({ message: error.message });
     }
 };
